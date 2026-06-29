@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>pochipo - ドット絵エディタ</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #1a1a2e;
+  color: #fff;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app {
+  width: 100%;
+  max-width: 440px;
+  padding: 16px 14px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  line-height: 0;
+}
+.logo svg { display: block; image-rendering: pixelated; }
+
+.header-right { display: flex; align-items: center; gap: 8px; }
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, transform 0.1s;
+}
+.icon-btn:active { transform: scale(0.92); }
+.icon-btn:hover { background: rgba(255,255,255,0.16); }
+.icon-btn:disabled { opacity: 0.35; cursor: default; }
+.icon-btn:disabled:hover { background: rgba(255,255,255,0.08); }
+.icon-btn.active { background: rgba(255,255,255,0.22); }
+
+/* ---- size control ---- */
+.size-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #888;
+}
+.size-ctrl input {
+  width: 46px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  text-align: center;
+  font-size: 14px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.size-ctrl input:focus { outline: none; border-color: rgba(255,255,255,0.4); }
+
+/* ---- canvas ---- */
+.canvas-wrap {
+  width: 100%;
+  background: #15151f;
+  border-radius: 14px;
+  padding: 8px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.4);
+}
+.canvas {
+  width: 100%;
+  display: grid;
+  gap: 0;
+  touch-action: none;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.cell {
+  aspect-ratio: 1 / 1;
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.05);
+}
+.cell.transparent {
+  background-color: #22222f;
+  background-image:
+    linear-gradient(45deg, #2c2c3e 25%, transparent 25%),
+    linear-gradient(-45deg, #2c2c3e 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #2c2c3e 75%),
+    linear-gradient(-45deg, transparent 75%, #2c2c3e 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
+/* background-display modes for transparent cells (display only — data stays 0) */
+.canvas[data-bg="white"] .cell.transparent { background-color: #ffffff; background-image: none; }
+.canvas[data-bg="gray"]  .cell.transparent { background-color: #5C5C5C; background-image: none; }
+.canvas[data-bg="white"] .cell,
+.canvas[data-bg="gray"] .cell { box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.08); }
+
+/* ---- canvas tabs ---- */
+.canvas-tabs { display: flex; gap: 6px; }
+.ctab {
+  flex: 1;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #999;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 1px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.ctab:active { transform: scale(0.97); }
+.ctab.active {
+  background: rgba(255,255,255,0.18);
+  color: #fff;
+  border-color: rgba(255,255,255,0.28);
+}
+
+/* ---- palette ---- */
+.palette-area {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.palette-row {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.set-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.set-btn {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #999;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.set-btn:active { transform: scale(0.95); }
+.set-btn.active {
+  background: rgba(255,255,255,0.18);
+  color: #fff;
+  border-color: rgba(255,255,255,0.28);
+}
+.swatch {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  border: 2px solid rgba(255,255,255,0.1);
+  position: relative;
+  cursor: grab;
+  transition: border-color 0.15s;
+  flex-shrink: 0;
+  touch-action: none;
+}
+.swatch.dragging-clone {
+  outline: 2px solid #fff;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.6);
+  opacity: 0.95;
+}
+.swatch.active {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.35);
+}
+.swatch.transparent {
+  background-color: #22222f;
+  background-image:
+    linear-gradient(45deg, #3a3a4e 25%, transparent 25%),
+    linear-gradient(-45deg, #3a3a4e 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #3a3a4e 75%),
+    linear-gradient(-45deg, transparent 75%, #3a3a4e 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 0 5px, 5px -5px, -5px 0;
+}
+.swatch .sw-label {
+  position: absolute;
+  bottom: 1px;
+  right: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: rgba(255,255,255,0.9);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  pointer-events: none;
+}
+.swatch.light .sw-label {
+  color: rgba(0,0,0,0.7);
+  text-shadow: 0 1px 2px rgba(255,255,255,0.5);
+}
+
+/* ---- picker ---- */
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 14px;
+  padding: 12px;
+}
+.picker-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.picker-swatch {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  flex-shrink: 0;
+}
+.hex-code {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  letter-spacing: 1px;
+  flex: 1;
+}
+.add-btn {
+  background: rgba(255,255,255,0.14);
+  border: none;
+  color: #fff;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, transform 0.1s;
+}
+.add-btn:active { transform: scale(0.94); }
+.add-btn:hover { background: rgba(255,255,255,0.22); }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 26px;
+  border-radius: 8px;
+  outline: none;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5), inset 0 0 0 2px rgba(0,0,0,0.1);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  border: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5), inset 0 0 0 2px rgba(0,0,0,0.1);
+}
+#hue {
+  background: linear-gradient(to right,
+    hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
+    hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%), hsl(360,100%,50%));
+}
+
+/* ---- settings panel ---- */
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 14px;
+}
+.settings-panel[hidden] { display: none; }
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.setting-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #999;
+}
+.seg {
+  display: flex;
+  gap: 4px;
+  background: rgba(255,255,255,0.05);
+  padding: 3px;
+  border-radius: 9px;
+}
+.seg button {
+  border: none;
+  background: transparent;
+  color: #aaa;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.seg button.active { background: rgba(255,255,255,0.18); color: #fff; }
+
+/* ---- toolbar ---- */
+.toolbar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.tool-btn:disabled { opacity: 0.35; cursor: default; }
+.tool-btn:disabled:hover { background: rgba(255,255,255,0.08); }
+.tool-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #fff;
+  height: 44px;
+  border-radius: 11px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+.tool-btn:active { transform: scale(0.96); }
+.tool-btn:hover { background: rgba(255,255,255,0.15); }
+.tool-btn.danger { color: #ff8a8a; }
+
+/* ---- modal ---- */
+.modal-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 200;
+}
+.modal-bg.show { display: flex; }
+.modal {
+  width: 100%;
+  max-width: 420px;
+  background: #20202f;
+  border-radius: 16px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+}
+.modal-title { font-size: 15px; font-weight: 700; color: #ddd; }
+.modal textarea {
+  width: 100%;
+  height: 260px;
+  background: #15151f;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  color: #e0e0e0;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 12px;
+  resize: none;
+  white-space: pre;
+  overflow: auto;
+}
+.modal textarea:focus { outline: none; border-color: rgba(255,255,255,0.35); }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.modal-actions button {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #fff;
+}
+.btn-primary { background: #4f7cff; }
+.btn-ghost { background: rgba(255,255,255,0.12); }
+
+/* ---- toast ---- */
+.toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: rgba(76, 175, 80, 0.95);
+  color: #fff;
+  padding: 11px 26px;
+  border-radius: 40px;
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+  opacity: 0;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+  z-index: 300;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <div class="logo" id="logo" title="pochipo"></div>
+    <div class="header-right">
+      <button class="icon-btn" id="undoBtn" title="元に戻す" disabled>↶</button>
+      <button class="icon-btn" id="redoBtn" title="やり直し" disabled>↷</button>
+      <button class="icon-btn" id="settingsBtn" title="設定">⚙</button>
+    </div>
+  </header>
+
+  <div class="settings-panel" id="settingsPanel" hidden>
+    <div class="setting-row">
+      <span class="setting-label">キャンバスサイズ</span>
+      <div class="size-ctrl">
+        <input type="number" id="wInput" min="1" max="64" value="16">
+        <span>×</span>
+        <input type="number" id="hInput" min="1" max="64" value="16">
+        <button class="tool-btn" id="resizeBtn" style="height:32px;padding:0 12px;">適用</button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">背景</span>
+      <div class="seg" id="bgSeg">
+        <button data-bg="checker" class="active">市松</button>
+        <button data-bg="white">白</button>
+        <button data-bg="gray">灰</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="canvas-tabs" id="canvasTabs">
+    <button class="ctab active" data-i="0">C1</button>
+    <button class="ctab" data-i="1">C2</button>
+    <button class="ctab" data-i="2">C3</button>
+  </div>
+
+  <div class="canvas-wrap">
+    <div class="canvas" id="canvas" data-bg="checker"></div>
+  </div>
+
+  <div class="palette-area">
+    <div class="palette-row" id="paletteRow"></div>
+    <div class="set-switch" id="setSwitch">
+      <button class="set-btn active" data-set="0">set1</button>
+      <button class="set-btn" data-set="1">set2</button>
+    </div>
+  </div>
+
+  <div class="picker">
+    <div class="picker-top">
+      <div class="picker-swatch" id="pickerSwatch"></div>
+      <span class="hex-code" id="hexCode">#FF0000</span>
+      <button class="add-btn" id="addBtn">＋ パレット追加</button>
+    </div>
+    <input type="range" id="hue" min="0" max="360" value="0">
+    <input type="range" id="saturation" min="0" max="100" value="100">
+    <input type="range" id="brightness" min="0" max="100" value="50">
+  </div>
+
+  <div class="toolbar">
+    <button class="tool-btn" id="exportCanvasBtn">キャンバスJSON出力</button>
+    <button class="tool-btn" id="exportPaletteBtn">パレットJSON出力</button>
+    <button class="tool-btn" id="importBtn">JSONインポート</button>
+    <button class="tool-btn danger" id="clearBtn">キャンバスをクリア</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle"></div>
+    <textarea id="modalText" spellcheck="false"></textarea>
+    <div class="modal-actions" id="modalActions"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ state ============ */
+// paletteColors[0] is always null (transparent / eraser). 1.. are hex strings.
+const DEFAULT_SET_1 = [null, '#000000', '#FFFFFF', '#E43B44', '#FFCD75', '#63C74D', '#0099DB', '#B55088', '#A06A42'];
+const DEFAULT_SET_2 = [null, '#1A1C2C', '#F4F4F4', '#EF7D57', '#FFCD75', '#38B764', '#41A6F6', '#5D275D', '#B13E53'];
+let paletteSets = [DEFAULT_SET_1.slice(), DEFAULT_SET_2.slice()]; // two independent palette sets
+let currentSet = 0;                       // active palette set (shared by all canvases)
+let paletteColors = paletteSets[currentSet]; // active palette (mirror of paletteSets[currentSet])
+let canvases = [];             // [{ width, height, grid }] — C1, C2, C3 (palette is shared)
+let current = 0;               // active canvas index
+let width = 16, height = 16;   // active canvas dimensions (mirror of canvases[current])
+let grid = [];                 // active canvas grid[r][c] = palette index
+let activeIndex = 1;           // currently selected paint index
+
+/* ============ elements ============ */
+const canvas = document.getElementById('canvas');
+const paletteRow = document.getElementById('paletteRow');
+const wInput = document.getElementById('wInput');
+const hInput = document.getElementById('hInput');
+const resizeBtn = document.getElementById('resizeBtn');
+const hueSlider = document.getElementById('hue');
+const satSlider = document.getElementById('saturation');
+const brtSlider = document.getElementById('brightness');
+const hexCode = document.getElementById('hexCode');
+const pickerSwatch = document.getElementById('pickerSwatch');
+const addBtn = document.getElementById('addBtn');
+const toast = document.getElementById('toast');
+const modalBg = document.getElementById('modalBg');
+const modalTitle = document.getElementById('modalTitle');
+const modalText = document.getElementById('modalText');
+const modalActions = document.getElementById('modalActions');
+const undoBtn = document.getElementById('undoBtn');
+const redoBtn = document.getElementById('redoBtn');
+const bgSeg = document.getElementById('bgSeg');
+const canvasTabs = document.getElementById('canvasTabs');
+const setSwitch = document.getElementById('setSwitch');
+
+/* ============ undo / redo ============ */
+let undoStack = [];
+let redoStack = [];
+let bgMode = 'checker';
+const HISTORY_MAX = 50;
+
+// keep the active globals (width/height/grid) written back into canvases[current]
+function syncActive() { canvases[current] = { width, height, grid }; }
+function loadActive() { ({ width, height, grid } = canvases[current]); wInput.value = width; hInput.value = height; }
+
+function snapshot() {
+  syncActive(); syncPalette();
+  return {
+    canvases: canvases.map(c => ({ width: c.width, height: c.height, grid: c.grid.map(r => r.slice()) })),
+    current,
+    paletteSets: paletteSets.map(p => p.slice()),
+    currentSet, activeIndex
+  };
+}
+function restoreSnapshot(s) {
+  canvases = s.canvases.map(c => ({ width: c.width, height: c.height, grid: c.grid.map(r => r.slice()) }));
+  current = s.current;
+  paletteSets = s.paletteSets.map(p => p.slice()); paletteSets.forEach(p => p[0] = null);
+  currentSet = s.currentSet;
+  paletteColors = paletteSets[currentSet];
+  activeIndex = s.activeIndex;
+  loadActive();
+  buildCanvas(); renderPalette(); updateTabs(); updateSetBtns(); save();
+}
+
+function updateTabs() {
+  [...canvasTabs.children].forEach(b => b.classList.toggle('active', +b.dataset.i === current));
+}
+function switchCanvas(i) {
+  if (i === current) return;
+  syncActive();
+  current = i;
+  loadActive();
+  undoStack = []; redoStack = []; updateHistoryBtns(); // history is per editing session on a canvas
+  buildCanvas(); updateTabs(); save();
+}
+canvasTabs.addEventListener('click', e => {
+  const b = e.target.closest('.ctab');
+  if (b) switchCanvas(+b.dataset.i);
+});
+
+// keep the active paletteColors written back into paletteSets[currentSet]
+function syncPalette() { paletteSets[currentSet] = paletteColors; }
+function updateSetBtns() {
+  [...setSwitch.children].forEach(b => b.classList.toggle('active', +b.dataset.set === currentSet));
+}
+function switchSet(i) {
+  if (i === currentSet) return;
+  syncPalette();
+  currentSet = i;
+  paletteColors = paletteSets[currentSet];
+  if (activeIndex >= paletteColors.length) activeIndex = 0;
+  // pixels already on the canvas keep their baked colors — only the picking palette changes
+  renderPalette();
+  updateSetBtns();
+  save();
+}
+setSwitch.addEventListener('click', e => {
+  const b = e.target.closest('.set-btn');
+  if (b) switchSet(+b.dataset.set);
+});
+function pushUndo() {
+  undoStack.push(snapshot());
+  if (undoStack.length > HISTORY_MAX) undoStack.shift();
+  redoStack = [];
+  updateHistoryBtns();
+}
+function updateHistoryBtns() {
+  undoBtn.disabled = undoStack.length === 0;
+  redoBtn.disabled = redoStack.length === 0;
+}
+function doUndo() {
+  if (!undoStack.length) return;
+  redoStack.push(snapshot());
+  restoreSnapshot(undoStack.pop());
+  updateHistoryBtns();
+}
+function doRedo() {
+  if (!redoStack.length) return;
+  undoStack.push(snapshot());
+  restoreSnapshot(redoStack.pop());
+  updateHistoryBtns();
+}
+undoBtn.addEventListener('click', doUndo);
+redoBtn.addEventListener('click', doRedo);
+
+function setBg(mode) {
+  bgMode = mode;
+  canvas.dataset.bg = mode;
+  [...bgSeg.children].forEach(b => b.classList.toggle('active', b.dataset.bg === mode));
+  save();
+}
+bgSeg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setBg(b.dataset.bg); });
+
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsPanel = document.getElementById('settingsPanel');
+settingsBtn.addEventListener('click', () => {
+  settingsPanel.hidden = !settingsPanel.hidden;
+  settingsBtn.classList.toggle('active', !settingsPanel.hidden);
+});
+
+/* ============ color helpers ============ */
+function hslToRgb(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+}
+function rgbToHex(r, g, b) {
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0').toUpperCase()).join('');
+}
+function isLightColor(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 > 140;
+}
+
+/* ============ picker ============ */
+function currentHex() {
+  const [r, g, b] = hslToRgb(+hueSlider.value, +satSlider.value, +brtSlider.value);
+  return rgbToHex(r, g, b);
+}
+function updatePicker() {
+  const h = +hueSlider.value, s = +satSlider.value, l = +brtSlider.value;
+  const hex = currentHex();
+  hexCode.textContent = hex;
+  pickerSwatch.style.backgroundColor = hex;
+
+  const satStops = [], brtStops = [];
+  for (let i = 0; i <= 100; i += 10) {
+    let c = hslToRgb(h, i, l); satStops.push(`rgb(${c[0]},${c[1]},${c[2]})`);
+    c = hslToRgb(h, s, i); brtStops.push(`rgb(${c[0]},${c[1]},${c[2]})`);
+  }
+  satSlider.style.background = `linear-gradient(to right, ${satStops.join(',')})`;
+  brtSlider.style.background = `linear-gradient(to right, ${brtStops.join(',')})`;
+}
+[hueSlider, satSlider, brtSlider].forEach(s => s.addEventListener('input', updatePicker));
+
+/* ============ palette ============ */
+function renderPalette() {
+  paletteRow.innerHTML = '';
+  paletteColors.forEach((col, i) => {
+    const sw = document.createElement('div');
+    sw.className = 'swatch' + (i === activeIndex ? ' active' : '');
+    sw.dataset.index = i;
+    if (i === 0) {
+      sw.classList.add('transparent');
+      sw.title = '透明 / 消しゴム';
+    } else {
+      sw.style.backgroundColor = col;
+      if (isLightColor(col)) sw.classList.add('light');
+      sw.title = col + '（長押し / 右クリックで削除）';
+    }
+    const lab = document.createElement('span');
+    lab.className = 'sw-label';
+    lab.textContent = i;
+    sw.appendChild(lab);
+
+    sw.addEventListener('pointerdown', e => onSwatchPointerDown(e, i, sw));
+    if (i !== 0) {
+      sw.addEventListener('contextmenu', e => { e.preventDefault(); dragState = null; removeColor(i); });
+      attachLongPress(sw, () => { dragState = null; removeColor(i); });
+    }
+    paletteRow.appendChild(sw);
+  });
+}
+
+function attachLongPress(el, cb) {
+  let t = null;
+  const clear = () => { if (t) { clearTimeout(t); t = null; } };
+  el.addEventListener('touchstart', () => {
+    el._lp = false; clear();
+    t = setTimeout(() => { el._lp = true; cb(); }, 550);
+  }, { passive: true });
+  ['touchend', 'touchmove', 'touchcancel'].forEach(ev => el.addEventListener(ev, clear));
+}
+
+/* ---- selection (with eyedropper) + drag reorder ---- */
+let dragState = null;
+
+function selectIndex(i) {
+  activeIndex = i;
+  if (i >= 1 && paletteColors[i]) loadColorToPicker(paletteColors[i]); // spoit
+  renderPalette();
+}
+
+function loadColorToPicker(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const [h, s, l] = rgbToHsl(r, g, b);
+  hueSlider.value = h; satSlider.value = s; brtSlider.value = l;
+  updatePicker();
+}
+
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+  if (max === min) { h = s = 0; }
+  else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+  return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
+}
+
+function onSwatchPointerDown(e, i, sw) {
+  if (e.button && e.button !== 0) return; // ignore right / middle button
+  dragState = { origIndex: i, el: sw, startX: e.clientX, startY: e.clientY, dragging: false, clone: null };
+}
+
+function onDocPointerMove(e) {
+  if (!dragState) return;
+  if (!dragState.dragging) {
+    if (dragState.origIndex < 1) return; // transparent (0) is not draggable
+    if (Math.hypot(e.clientX - dragState.startX, e.clientY - dragState.startY) < 8) return;
+    beginDrag(e);
+  }
+  e.preventDefault();
+  dragState.clone.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  const over = under && under.closest('.swatch');
+  if (over && over !== dragState.el && over.parentElement === paletteRow && over.dataset.index !== '0') {
+    const rect = over.getBoundingClientRect();
+    if (e.clientX > rect.left + rect.width / 2) over.after(dragState.el);
+    else over.before(dragState.el);
+  }
+}
+
+function beginDrag(e) {
+  dragState.dragging = true;
+  const sw = dragState.el;
+  sw._lp = false;
+  const rect = sw.getBoundingClientRect();
+  const clone = sw.cloneNode(true);
+  clone.className = 'swatch dragging-clone';
+  Object.assign(clone.style, {
+    position: 'fixed', left: '0', top: '0',
+    width: rect.width + 'px', height: rect.height + 'px',
+    margin: (-rect.height / 2) + 'px 0 0 ' + (-rect.width / 2) + 'px',
+    pointerEvents: 'none', zIndex: '400',
+    transform: `translate(${e.clientX}px, ${e.clientY}px)`
+  });
+  document.body.appendChild(clone);
+  dragState.clone = clone;
+  sw.style.opacity = '0.3';
+}
+
+function endDrag() {
+  if (!dragState) return;
+  const st = dragState; dragState = null;
+  if (st.dragging) {
+    if (st.clone) st.clone.remove();
+    st.el.style.opacity = '';
+    applyPaletteOrderFromDOM();
+  } else {
+    if (st.el._lp) { st.el._lp = false; return; } // long-press delete already fired
+    selectIndex(st.origIndex);
+  }
+}
+
+function applyPaletteOrderFromDOM() {
+  // current DOM order of swatches = sequence of original indices
+  let order = [...paletteRow.children].map(el => +el.dataset.index);
+  if (order.join() === order.map((_, i) => i).join()) return; // unchanged → skip
+  pushUndo();
+  if (order[0] !== 0) { order = order.filter(x => x !== 0); order.unshift(0); }
+  const activeCol = activeIndex === 0 ? null : paletteColors[activeIndex];
+  paletteColors = order.map(o => paletteColors[o]);
+  paletteColors[0] = null;
+  // painted pixels are color-based, so reordering doesn't touch the canvas
+  activeIndex = activeCol == null ? 0 : Math.max(0, paletteColors.indexOf(activeCol));
+  renderPalette();
+  save();
+}
+
+function addColor() {
+  const hex = currentHex();
+  const existing = paletteColors.indexOf(hex);
+  if (existing !== -1) {
+    activeIndex = existing;
+    renderPalette();
+    showToast('既にパレットにあります');
+    return;
+  }
+  paletteColors.push(hex);
+  activeIndex = paletteColors.length - 1;
+  renderPalette();
+  save();
+  showToast('追加しました ✓');
+}
+
+function removeColor(k) {
+  if (k === 0) return;
+  if (!confirm(`インデックス ${k}（${paletteColors[k]}）をパレットから削除しますか？\n（キャンバスに描いた色はそのまま残ります）`)) return;
+  pushUndo();
+  paletteColors.splice(k, 1);
+  if (activeIndex === k) activeIndex = 0;
+  else if (activeIndex > k) activeIndex--;
+  renderPalette();
+  save();
+}
+
+addBtn.addEventListener('click', addColor);
+
+/* ============ canvas ============ */
+// grid cells store the actual color (hex string) or null (transparent),
+// so painted pixels are "baked" and never change when palette sets switch.
+function emptyGrid(w, h) {
+  return Array.from({ length: h }, () => Array(w).fill(null));
+}
+function applyCell(cell, col) {
+  if (!col) {
+    cell.classList.add('transparent');
+    cell.style.backgroundColor = '';
+  } else {
+    cell.classList.remove('transparent');
+    cell.style.backgroundColor = col;
+  }
+}
+function buildCanvas() {
+  canvas.style.gridTemplateColumns = `repeat(${width}, 1fr)`;
+  canvas.innerHTML = '';
+  for (let r = 0; r < height; r++) {
+    for (let c = 0; c < width; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.r = r;
+      cell.dataset.c = c;
+      applyCell(cell, grid[r][c]);
+      canvas.appendChild(cell);
+    }
+  }
+}
+
+let drawing = false;
+function paintAt(target) {
+  if (!target || !target.classList || !target.classList.contains('cell')) return;
+  const r = +target.dataset.r, c = +target.dataset.c;
+  const col = activeIndex === 0 ? null : (paletteColors[activeIndex] || null);
+  if (grid[r][c] === col) return;
+  grid[r][c] = col;
+  applyCell(target, col);
+  scheduleSave();
+}
+canvas.addEventListener('pointerdown', e => {
+  drawing = true;
+  pushUndo();
+  paintAt(e.target);
+  e.preventDefault();
+});
+canvas.addEventListener('pointermove', e => {
+  if (!drawing) return;
+  paintAt(document.elementFromPoint(e.clientX, e.clientY));
+});
+window.addEventListener('pointerup', () => { drawing = false; });
+window.addEventListener('pointercancel', () => { drawing = false; });
+
+/* ============ resize ============ */
+function doResize(newW, newH) {
+  newW = Math.max(1, Math.min(64, newW || 1));
+  newH = Math.max(1, Math.min(64, newH || 1));
+  const ng = emptyGrid(newW, newH);
+  for (let r = 0; r < Math.min(height, newH); r++)
+    for (let c = 0; c < Math.min(width, newW); c++)
+      ng[r][c] = grid[r][c];
+  width = newW; height = newH; grid = ng;
+  wInput.value = width; hInput.value = height;
+  buildCanvas();
+  save();
+}
+resizeBtn.addEventListener('click', () => { pushUndo(); doResize(+wInput.value, +hInput.value); });
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if (!confirm('キャンバスを全て透明にしますか？')) return;
+  pushUndo();
+  grid = emptyGrid(width, height);
+  buildCanvas();
+  save();
+  showToast('クリアしました');
+});
+
+/* ============ JSON build ============ */
+function buildCanvasJSON() {
+  // build a self-contained palette from the colors actually used in this canvas
+  const colorToIdx = new Map();
+  const colors = [null];
+  for (let r = 0; r < height; r++)
+    for (let c = 0; c < width; c++) {
+      const col = grid[r][c];
+      if (col && !colorToIdx.has(col)) { colorToIdx.set(col, colors.length); colors.push(col); }
+    }
+  const lines = [];
+  lines.push('{');
+  lines.push('  "palette": {');
+  const pal = ['    "0": null'];
+  for (let i = 1; i < colors.length; i++) pal.push(`    "${i}": "${colors[i]}"`);
+  lines.push(pal.join(',\n'));
+  lines.push('  },');
+  lines.push(`  "width": ${width},`);
+  lines.push(`  "height": ${height},`);
+  lines.push('  "grid": [');
+  for (let r = 0; r < height; r++) {
+    const rowStr = '[' + grid[r].map(col => col ? colorToIdx.get(col) : 0).join(',') + ']';
+    const last = r === height - 1;
+    lines.push(`    ${rowStr}${last ? '  ' : ', '}// row ${r}`);
+  }
+  lines.push('  ]');
+  lines.push('}');
+  return lines.join('\n');
+}
+function buildPaletteJSON() {
+  const pal = ['  "0": null'];
+  for (let i = 1; i < paletteColors.length; i++) pal.push(`  "${i}": "${paletteColors[i]}"`);
+  return '{\n' + pal.join(',\n') + '\n}';
+}
+
+/* ============ JSON import ============ */
+function parseLoose(text) {
+  // strip // line comments (hex values contain no //) and trailing commas
+  let cleaned = text.replace(/\/\/[^\n\r]*/g, '');
+  cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
+  return JSON.parse(cleaned);
+}
+function paletteObjToArray(obj) {
+  const keys = Object.keys(obj).map(Number).filter(n => !isNaN(n));
+  const max = keys.length ? Math.max(...keys) : 0;
+  const arr = [];
+  for (let i = 0; i <= max; i++) {
+    const v = obj[i];
+    arr[i] = (i === 0) ? null : (v == null ? null : v);
+  }
+  arr[0] = null;
+  return arr;
+}
+function importJSON(text) {
+  let data;
+  try { data = parseLoose(text); }
+  catch (e) { showToast('JSONの解析に失敗しました'); return; }
+
+  try {
+    pushUndo();
+    if (data.grid && data.palette) {
+      const pal = paletteObjToArray(data.palette); // [null, hex, ...]
+      const g = data.grid;
+      height = data.height || g.length;
+      width = data.width || (g[0] ? g[0].length : 0);
+      grid = emptyGrid(width, height);
+      for (let r = 0; r < height; r++)
+        for (let c = 0; c < width; c++) {
+          const v = g[r] && g[r][c];
+          grid[r][c] = (v != null && pal[v]) ? pal[v] : null; // bake color into the cell
+        }
+      paletteColors = pal;                 // load imported palette into the active set
+      paletteSets[currentSet] = paletteColors;
+    } else {
+      // treat as palette-only object → replace active set
+      paletteColors = paletteObjToArray(data);
+      paletteSets[currentSet] = paletteColors;
+    }
+    activeIndex = Math.min(activeIndex, paletteColors.length - 1);
+    if (activeIndex < 0) activeIndex = 0;
+    wInput.value = width; hInput.value = height;
+    buildCanvas();
+    renderPalette();
+    updateSetBtns();
+    save();
+    closeModal();
+    showToast('インポートしました ✓');
+  } catch (e) {
+    showToast('データ形式が不正です');
+  }
+}
+
+/* ============ modal ============ */
+function openExport(title, text) {
+  modalTitle.textContent = title;
+  modalText.value = text;
+  modalText.readOnly = true;
+  modalActions.innerHTML = '';
+  const copy = mkBtn('コピー', 'btn-primary', async () => { await copyText(text); showToast('コピーしました ✓'); });
+  const close = mkBtn('閉じる', 'btn-ghost', closeModal);
+  modalActions.append(copy, close);
+  modalBg.classList.add('show');
+}
+function openImport() {
+  modalTitle.textContent = 'JSONを貼り付けてインポート';
+  modalText.value = '';
+  modalText.readOnly = false;
+  modalText.placeholder = 'ここにキャンバスJSON または パレットJSONを貼り付け';
+  modalActions.innerHTML = '';
+  const imp = mkBtn('読み込む', 'btn-primary', () => importJSON(modalText.value));
+  const cancel = mkBtn('キャンセル', 'btn-ghost', closeModal);
+  modalActions.append(imp, cancel);
+  modalBg.classList.add('show');
+}
+function mkBtn(label, cls, fn) {
+  const b = document.createElement('button');
+  b.className = cls; b.textContent = label; b.addEventListener('click', fn);
+  return b;
+}
+function closeModal() { modalBg.classList.remove('show'); }
+modalBg.addEventListener('click', e => { if (e.target === modalBg) closeModal(); });
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+  }
+}
+
+document.getElementById('exportCanvasBtn').addEventListener('click', () => openExport('キャンバスJSON', buildCanvasJSON()));
+document.getElementById('exportPaletteBtn').addEventListener('click', () => openExport('パレットJSON', buildPaletteJSON()));
+document.getElementById('importBtn').addEventListener('click', openImport);
+
+/* ============ toast ============ */
+let toastTimer;
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+}
+
+/* ============ persistence ============ */
+let saveTimer;
+function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); }
+function save() {
+  syncActive(); syncPalette();
+  localStorage.setItem('pochipo-state', JSON.stringify({ version: 2, paletteSets, currentSet, canvases, current, activeIndex, bgMode }));
+}
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem('pochipo-state'));
+    if (!s) return;
+    activeIndex = s.activeIndex ?? 1;
+    bgMode = s.bgMode || 'checker';
+    if (s.paletteSets) {
+      paletteSets = s.paletteSets;
+      currentSet = s.currentSet || 0;
+    } else if (s.paletteColors) {
+      // migrate single-palette format → set1, default set2
+      paletteSets = [s.paletteColors, DEFAULT_SET_2.slice()];
+    }
+    paletteSets.forEach(p => { if (p) p[0] = null; });
+
+    let cvs = null;
+    if (s.canvases) { cvs = s.canvases; current = s.current || 0; }
+    else if (s.grid) { cvs = [{ width: s.width, height: s.height, grid: s.grid }]; }
+
+    if (cvs) {
+      // migrate index-based grids (v<2) → color-based grids
+      if (s.version !== 2) {
+        const migPal = paletteSets[currentSet] || [];
+        cvs.forEach(cv => {
+          cv.grid = cv.grid.map(row => row.map(v => typeof v === 'number' ? (migPal[v] || null) : (v ?? null)));
+        });
+      }
+      canvases = cvs;
+    }
+  } catch {}
+}
+
+/* ============ logo ============ */
+const LOGO = {
+  palette: { 0: null, 1: '#FFFFFF', 2: '#A1B1B5', 3: '#000000', 4: '#E43B44', 5: '#E5A92A', 6: '#08A06D', 7: '#1A3A5B', 8: '#1F6EBD', 9: '#1CA4F2' },
+  width: 7, height: 7,
+  grid: [
+    [3,3,3,3,3,3,3],
+    [3,7,7,7,3,7,3],
+    [3,7,1,8,3,8,3],
+    [3,7,8,1,1,9,3],
+    [3,3,3,1,1,3,3],
+    [3,7,8,9,3,9,3],
+    [3,3,3,3,3,3,3]
+  ]
+};
+function renderLogo() {
+  const px = 5; // size of each logo pixel
+  const { width: w, height: h, grid: g, palette: pal } = LOGO;
+  let rects = '';
+  for (let r = 0; r < h; r++)
+    for (let c = 0; c < w; c++) {
+      const col = pal[g[r][c]];
+      if (!col) continue;
+      rects += `<rect x="${c * px}" y="${r * px}" width="${px}" height="${px}" fill="${col}"/>`;
+    }
+  document.getElementById('logo').innerHTML =
+    `<svg width="${w * px}" height="${h * px}" viewBox="0 0 ${w * px} ${h * px}" shape-rendering="crispEdges">${rects}</svg>`;
+}
+
+/* ============ init ============ */
+renderLogo();
+document.addEventListener('pointermove', onDocPointerMove, { passive: false });
+document.addEventListener('pointerup', endDrag);
+document.addEventListener('pointercancel', endDrag);
+
+load();
+while (paletteSets.length < 2) paletteSets.push(DEFAULT_SET_2.slice());
+currentSet = Math.min(Math.max(currentSet, 0), paletteSets.length - 1);
+paletteColors = paletteSets[currentSet];
+while (canvases.length < 3) canvases.push({ width: 16, height: 16, grid: emptyGrid(16, 16) });
+current = Math.min(Math.max(current, 0), canvases.length - 1);
+loadActive();
+buildCanvas();
+renderPalette();
+updatePicker();
+setBg(bgMode);
+updateTabs();
+updateSetBtns();
+updateHistoryBtns();
+</script>
+</body>
+</html>
