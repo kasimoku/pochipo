@@ -363,6 +363,16 @@ input[type="range"]::-moz-range-thumb {
 }
 .tool-btn:disabled { opacity: 0.35; cursor: default; }
 .tool-btn:disabled:hover { background: rgba(255,255,255,0.08); }
+
+/* ---- copyright ---- */
+.copyright {
+  margin-top: 6px;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: rgba(255,255,255,0.22);
+  user-select: none;
+}
 .tool-btn {
   background: rgba(255,255,255,0.08);
   border: 1px solid rgba(255,255,255,0.1);
@@ -518,6 +528,8 @@ input[type="range"]::-moz-range-thumb {
     <button class="tool-btn" id="importBtn">JSONインポート</button>
     <button class="tool-btn danger" id="clearBtn">キャンバスをクリア</button>
   </div>
+
+  <footer class="copyright">© 2026 岩木しあん</footer>
 </div>
 
 <div class="modal-bg" id="modalBg">
