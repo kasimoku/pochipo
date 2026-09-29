@@ -154,6 +154,45 @@ header {
   border-color: rgba(255,255,255,0.28);
 }
 
+/* ---- layer bar ---- */
+.layer-bar { display: flex; gap: 6px; }
+.layer {
+  flex: 1;
+  display: flex;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  overflow: hidden;
+  transition: background 0.15s, border-color 0.15s;
+}
+.layer.active {
+  background: rgba(255,255,255,0.18);
+  border-color: rgba(255,255,255,0.28);
+}
+.layer button {
+  background: transparent;
+  border: none;
+  color: #999;
+  cursor: pointer;
+}
+.layer .eye {
+  width: 42px;
+  flex-shrink: 0;
+  font-size: 16px;
+  border-right: 1px solid rgba(255,255,255,0.08);
+}
+.layer .lsel {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  padding: 0 12px;
+}
+.layer.active .lsel { color: #fff; }
+.layer.hidden-layer .eye { opacity: 0.3; }
+.layer.hidden-layer .lsel { color: #666; text-decoration: line-through; }
+
 /* ---- palette ---- */
 .palette-area {
   display: flex;
@@ -499,11 +538,12 @@ input[type="range"]::-moz-range-thumb {
     padding: 16px 20px 10px;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-    grid-template-areas: "header" "tabs" "stage" "side" "footer";
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "header" "tabs" "layers" "stage" "side" "footer";
   }
   header { grid-area: header; }
   .canvas-tabs { grid-area: tabs; }
+  .layer-bar { grid-area: layers; }
   .stage {
     grid-area: stage;
     min-height: 0;
@@ -536,8 +576,8 @@ input[type="range"]::-moz-range-thumb {
 @media (min-width: 700px) and (orientation: landscape) {
   .app {
     grid-template-columns: minmax(0, 1fr) 360px;
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
-    grid-template-areas: "header header" "tabs side" "stage side" "footer footer";
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "header header" "tabs side" "layers side" "stage side" "footer footer";
   }
   .side { min-height: 0; overflow-y: auto; }
 }
@@ -561,7 +601,7 @@ input[type="range"]::-moz-range-thumb {
     <button class="menu-item" id="exportPaletteBtn">パレットJSON出力</button>
     <button class="menu-item" id="importBtn">JSONインポート</button>
     <div class="menu-sep"></div>
-    <button class="menu-item danger" id="clearBtn">キャンバスをクリア</button>
+    <button class="menu-item danger" id="clearBtn">選択中のレイヤーをクリア</button>
   </div>
 
   <div class="settings-panel" id="settingsPanel" hidden>
@@ -588,6 +628,17 @@ input[type="range"]::-moz-range-thumb {
     <button class="ctab active" data-i="0">C1</button>
     <button class="ctab" data-i="1">C2</button>
     <button class="ctab" data-i="2">C3</button>
+  </div>
+
+  <div class="layer-bar" id="layerBar">
+    <div class="layer" data-l="0">
+      <button class="eye" data-l="0" title="表示 / 非表示">👁</button>
+      <button class="lsel" data-l="0">レイヤー1</button>
+    </div>
+    <div class="layer" data-l="1">
+      <button class="eye" data-l="1" title="表示 / 非表示">👁</button>
+      <button class="lsel" data-l="1">レイヤー2</button>
+    </div>
   </div>
 
   <div class="stage" id="stage">
@@ -638,10 +689,13 @@ const DEFAULT_SET_2 = [null, '#1A1C2C', '#F4F4F4', '#EF7D57', '#FFCD75', '#38B76
 let paletteSets = [DEFAULT_SET_1.slice(), DEFAULT_SET_2.slice()]; // two independent palette sets
 let currentSet = 0;                       // active palette set (shared by all canvases)
 let paletteColors = paletteSets[currentSet]; // active palette (mirror of paletteSets[currentSet])
-let canvases = [];             // [{ width, height, grid }] — C1, C2, C3 (palette is shared)
+const LAYER_COUNT = 2;         // layer 0 = レイヤー1 (bottom), layer 1 = レイヤー2 (top)
+let canvases = [];             // [{ width, height, layers, visible, activeLayer }] — C1, C2, C3 (palette is shared)
 let current = 0;               // active canvas index
 let width = 16, height = 16;   // active canvas dimensions (mirror of canvases[current])
-let grid = [];                 // active canvas grid[r][c] = palette index
+let layers = [];               // active canvas layers[l][r][c] = hex color or null
+let visible = [true, true];    // per-layer visibility of the active canvas
+let activeLayer = 0;           // layer that painting goes to
 let activeIndex = 1;           // currently selected paint index
 
 /* ============ elements ============ */
@@ -666,6 +720,7 @@ const redoBtn = document.getElementById('redoBtn');
 const bgSeg = document.getElementById('bgSeg');
 const canvasTabs = document.getElementById('canvasTabs');
 const setSwitch = document.getElementById('setSwitch');
+const layerBar = document.getElementById('layerBar');
 
 /* ============ undo / redo ============ */
 let undoStack = [];
@@ -673,21 +728,30 @@ let redoStack = [];
 let bgMode = 'checker';
 const HISTORY_MAX = 50;
 
-// keep the active globals (width/height/grid) written back into canvases[current]
-function syncActive() { canvases[current] = { width, height, grid }; }
-function loadActive() { ({ width, height, grid } = canvases[current]); wInput.value = width; hInput.value = height; }
+// keep the active globals (width/height/layers/...) written back into canvases[current]
+function syncActive() { canvases[current] = { width, height, layers, visible, activeLayer }; }
+function loadActive() {
+  ({ width, height, layers, visible, activeLayer } = canvases[current]);
+  wInput.value = width; hInput.value = height;
+  updateLayerBar();
+}
+const copyLayers = ls => ls.map(g => g.map(r => r.slice()));
 
 function snapshot() {
   syncActive(); syncPalette();
   return {
-    canvases: canvases.map(c => ({ width: c.width, height: c.height, grid: c.grid.map(r => r.slice()) })),
+    canvases: canvases.map(c => ({ width: c.width, height: c.height, layers: copyLayers(c.layers) })),
     current,
     paletteSets: paletteSets.map(p => p.slice()),
     currentSet, activeIndex
   };
 }
 function restoreSnapshot(s) {
-  canvases = s.canvases.map(c => ({ width: c.width, height: c.height, grid: c.grid.map(r => r.slice()) }));
+  // pixels come from the snapshot; layer visibility / selection is view state and stays as-is
+  canvases = s.canvases.map((c, i) => ({
+    width: c.width, height: c.height, layers: copyLayers(c.layers),
+    visible: canvases[i].visible, activeLayer: canvases[i].activeLayer
+  }));
   current = s.current;
   paletteSets = s.paletteSets.map(p => p.slice()); paletteSets.forEach(p => p[0] = null);
   currentSet = s.currentSet;
@@ -712,6 +776,37 @@ canvasTabs.addEventListener('click', e => {
   const b = e.target.closest('.ctab');
   if (b) switchCanvas(+b.dataset.i);
 });
+
+/* ============ layers ============ */
+function updateLayerBar() {
+  [...layerBar.children].forEach(el => {
+    const l = +el.dataset.l;
+    el.classList.toggle('active', l === activeLayer);
+    el.classList.toggle('hidden-layer', !visible[l]);
+  });
+}
+function selectLayer(l) {
+  activeLayer = l;
+  updateLayerBar(); save();
+}
+function setLayerVisible(l, on) {
+  visible[l] = on;
+  updateLayerBar(); redrawCells(); save();
+}
+layerBar.addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const l = +b.dataset.l;
+  if (b.classList.contains('eye')) setLayerVisible(l, !visible[l]);
+  else selectLayer(l);
+});
+// the color shown at (r, c): topmost visible layer that has a pixel there
+function composite(r, c) {
+  for (let l = LAYER_COUNT - 1; l >= 0; l--) {
+    if (visible[l] && layers[l][r][c]) return layers[l][r][c];
+  }
+  return null;
+}
 
 // keep the active paletteColors written back into paletteSets[currentSet]
 function syncPalette() { paletteSets[currentSet] = paletteColors; }
@@ -1012,6 +1107,17 @@ addBtn.addEventListener('click', addColor);
 function emptyGrid(w, h) {
   return Array.from({ length: h }, () => Array(w).fill(null));
 }
+function emptyLayers(w, h) {
+  return Array.from({ length: LAYER_COUNT }, () => emptyGrid(w, h));
+}
+// copy g into a w×h grid (cropping or padding with transparent)
+function fitGrid(g, w, h) {
+  const ng = emptyGrid(w, h);
+  for (let r = 0; r < Math.min(g.length, h); r++)
+    for (let c = 0; c < Math.min(g[r].length, w); c++)
+      ng[r][c] = g[r][c] ?? null;
+  return ng;
+}
 function applyCell(cell, col) {
   if (!col) {
     cell.classList.add('transparent');
@@ -1030,11 +1136,16 @@ function buildCanvas() {
       cell.className = 'cell';
       cell.dataset.r = r;
       cell.dataset.c = c;
-      applyCell(cell, grid[r][c]);
+      applyCell(cell, composite(r, c));
       canvas.appendChild(cell);
     }
   }
   fitCanvas();
+}
+
+// repaint every cell from the layers without rebuilding the DOM
+function redrawCells() {
+  for (const cell of canvas.children) applyCell(cell, composite(+cell.dataset.r, +cell.dataset.c));
 }
 
 // on wide screens, scale the canvas to the largest size that fits the stage
@@ -1057,12 +1168,18 @@ function paintAt(target) {
   if (!target || !target.classList || !target.classList.contains('cell')) return;
   const r = +target.dataset.r, c = +target.dataset.c;
   const col = activeIndex === 0 ? null : (paletteColors[activeIndex] || null);
-  if (grid[r][c] === col) return;
-  grid[r][c] = col;
-  applyCell(target, col);
+  const g = layers[activeLayer];
+  if (g[r][c] === col) return;
+  g[r][c] = col;
+  applyCell(target, composite(r, c));
   scheduleSave();
 }
 canvas.addEventListener('pointerdown', e => {
+  if (!visible[activeLayer]) {
+    // drawing on a hidden layer would be invisible — reveal it first
+    setLayerVisible(activeLayer, true);
+    showToast(`レイヤー${activeLayer + 1}を表示しました`);
+  }
   drawing = true;
   pushUndo();
   paintAt(e.target);
@@ -1079,11 +1196,8 @@ window.addEventListener('pointercancel', () => { drawing = false; });
 function doResize(newW, newH) {
   newW = Math.max(1, Math.min(64, newW || 1));
   newH = Math.max(1, Math.min(64, newH || 1));
-  const ng = emptyGrid(newW, newH);
-  for (let r = 0; r < Math.min(height, newH); r++)
-    for (let c = 0; c < Math.min(width, newW); c++)
-      ng[r][c] = grid[r][c];
-  width = newW; height = newH; grid = ng;
+  layers = layers.map(g => fitGrid(g, newW, newH));
+  width = newW; height = newH;
   wInput.value = width; hInput.value = height;
   buildCanvas();
   save();
@@ -1091,9 +1205,9 @@ function doResize(newW, newH) {
 resizeBtn.addEventListener('click', () => { pushUndo(); doResize(+wInput.value, +hInput.value); });
 
 document.getElementById('clearBtn').addEventListener('click', () => {
-  if (!confirm('キャンバスを全て透明にしますか？')) return;
+  if (!confirm(`レイヤー${activeLayer + 1}を全て透明にしますか？`)) return;
   pushUndo();
-  grid = emptyGrid(width, height);
+  layers[activeLayer] = emptyGrid(width, height);
   buildCanvas();
   save();
   showToast('クリアしました');
@@ -1101,6 +1215,8 @@ document.getElementById('clearBtn').addEventListener('click', () => {
 
 /* ============ JSON build ============ */
 function buildCanvasJSON() {
+  // export what is currently shown: visible layers flattened into one grid
+  const grid = Array.from({ length: height }, (_, r) => Array.from({ length: width }, (_, c) => composite(r, c)));
   // build a self-contained palette from the colors actually used in this canvas
   const colorToIdx = new Map();
   const colors = [null];
@@ -1164,12 +1280,16 @@ function importJSON(text) {
       const g = data.grid;
       height = data.height || g.length;
       width = data.width || (g[0] ? g[0].length : 0);
-      grid = emptyGrid(width, height);
+      const grid = emptyGrid(width, height);
       for (let r = 0; r < height; r++)
         for (let c = 0; c < width; c++) {
           const v = g[r] && g[r][c];
           grid[r][c] = (v != null && pal[v]) ? pal[v] : null; // bake color into the cell
         }
+      // imported pixels go into the selected layer; the other layer is fitted to the new size
+      layers = layers.map((lg, l) => l === activeLayer ? grid : fitGrid(lg, width, height));
+      visible[activeLayer] = true;
+      updateLayerBar();
       paletteColors = pal;                 // load imported palette into the active set
       paletteSets[currentSet] = paletteColors;
     } else {
@@ -1249,7 +1369,7 @@ let saveTimer;
 function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); }
 function save() {
   syncActive(); syncPalette();
-  localStorage.setItem('pochipo-state', JSON.stringify({ version: 2, paletteSets, currentSet, canvases, current, activeIndex, bgMode }));
+  localStorage.setItem('pochipo-state', JSON.stringify({ version: 3, paletteSets, currentSet, canvases, current, activeIndex, bgMode }));
 }
 function load() {
   try {
@@ -1272,13 +1392,23 @@ function load() {
 
     if (cvs) {
       // migrate index-based grids (v<2) → color-based grids
-      if (s.version !== 2) {
+      if (!s.version || s.version < 2) {
         const migPal = paletteSets[currentSet] || [];
         cvs.forEach(cv => {
           cv.grid = cv.grid.map(row => row.map(v => typeof v === 'number' ? (migPal[v] || null) : (v ?? null)));
         });
       }
-      canvases = cvs;
+      // migrate single-grid canvases (v<3) → existing pixels become レイヤー1
+      canvases = cvs.map(cv => {
+        const w = cv.width, h = cv.height;
+        const ls = cv.layers || [cv.grid];
+        return {
+          width: w, height: h,
+          layers: Array.from({ length: LAYER_COUNT }, (_, l) => fitGrid(ls[l] || [], w, h)),
+          visible: Array.from({ length: LAYER_COUNT }, (_, l) => cv.visible ? cv.visible[l] !== false : true),
+          activeLayer: Math.min(Math.max(cv.activeLayer || 0, 0), LAYER_COUNT - 1)
+        };
+      });
     }
   } catch {}
 }
@@ -1321,7 +1451,7 @@ load();
 while (paletteSets.length < 2) paletteSets.push(DEFAULT_SET_2.slice());
 currentSet = Math.min(Math.max(currentSet, 0), paletteSets.length - 1);
 paletteColors = paletteSets[currentSet];
-while (canvases.length < 3) canvases.push({ width: 16, height: 16, grid: emptyGrid(16, 16) });
+while (canvases.length < 3) canvases.push({ width: 16, height: 16, layers: emptyLayers(16, 16), visible: [true, true], activeLayer: 0 });
 current = Math.min(Math.max(current, 0), canvases.length - 1);
 loadActive();
 buildCanvas();
