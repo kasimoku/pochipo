@@ -28,6 +28,7 @@ body {
 }
 
 .app {
+  position: relative;
   width: 100%;
   max-width: 440px;
   padding: 16px 14px 40px;
@@ -355,12 +356,41 @@ input[type="range"]::-moz-range-thumb {
 }
 .seg button.active { background: rgba(255,255,255,0.18); color: #fff; }
 
-/* ---- toolbar ---- */
-.toolbar {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+/* ---- output menu (HUD popover) ---- */
+.menu-pop {
+  position: absolute;
+  top: 58px;
+  right: 14px;
+  z-index: 100;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: #20202f;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.55);
 }
+.menu-pop[hidden] { display: none; }
+.menu-item {
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.menu-item:hover, .menu-item:active { background: rgba(255,255,255,0.1); }
+.menu-item.danger { color: #ff8a8a; }
+.menu-sep { height: 1px; margin: 4px 6px; background: rgba(255,255,255,0.08); }
+
+/* ---- layout wrappers ---- */
+.side { display: flex; flex-direction: column; gap: 14px; }
+
 .tool-btn:disabled { opacity: 0.35; cursor: default; }
 .tool-btn:disabled:hover { background: rgba(255,255,255,0.08); }
 
@@ -459,6 +489,58 @@ input[type="range"]::-moz-range-thumb {
   z-index: 300;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---- wide screens (iPad etc.): canvas + color area fill the viewport ---- */
+@media (min-width: 700px) {
+  body { height: 100dvh; overflow: hidden; }
+  .app {
+    max-width: none;
+    height: 100dvh;
+    padding: 16px 20px 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "header" "tabs" "stage" "side" "footer";
+  }
+  header { grid-area: header; }
+  .canvas-tabs { grid-area: tabs; }
+  .stage {
+    grid-area: stage;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .side { grid-area: side; }
+  .copyright { grid-area: footer; margin-top: 0; }
+  .menu-pop { right: 20px; }
+  /* settings float over the canvas instead of pushing it down */
+  .settings-panel {
+    position: absolute;
+    top: 58px;
+    right: 20px;
+    z-index: 100;
+    width: 380px;
+    background: #20202f;
+    border-color: rgba(255,255,255,0.1);
+    box-shadow: 0 12px 36px rgba(0,0,0,0.55);
+  }
+  .swatch { width: 44px; height: 44px; }
+  .set-btn { height: 44px; }
+}
+@media (min-width: 700px) and (orientation: portrait) {
+  /* palette and picker side by side under the canvas */
+  .side { flex-direction: row; align-items: stretch; }
+  .side > * { flex: 1; min-width: 0; }
+}
+@media (min-width: 700px) and (orientation: landscape) {
+  .app {
+    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "header header" "tabs side" "stage side" "footer footer";
+  }
+  .side { min-height: 0; overflow-y: auto; }
+}
 </style>
 </head>
 <body>
@@ -470,8 +552,17 @@ input[type="range"]::-moz-range-thumb {
       <button class="icon-btn" id="undoBtn" title="元に戻す" disabled>↶</button>
       <button class="icon-btn" id="redoBtn" title="やり直し" disabled>↷</button>
       <button class="icon-btn" id="settingsBtn" title="設定">⚙</button>
+      <button class="icon-btn" id="menuBtn" title="出力・読み込み">☰</button>
     </div>
   </header>
+
+  <div class="menu-pop" id="menuPop" hidden>
+    <button class="menu-item" id="exportCanvasBtn">キャンバスJSON出力</button>
+    <button class="menu-item" id="exportPaletteBtn">パレットJSON出力</button>
+    <button class="menu-item" id="importBtn">JSONインポート</button>
+    <div class="menu-sep"></div>
+    <button class="menu-item danger" id="clearBtn">キャンバスをクリア</button>
+  </div>
 
   <div class="settings-panel" id="settingsPanel" hidden>
     <div class="setting-row">
@@ -499,10 +590,13 @@ input[type="range"]::-moz-range-thumb {
     <button class="ctab" data-i="2">C3</button>
   </div>
 
-  <div class="canvas-wrap">
-    <div class="canvas" id="canvas" data-bg="checker"></div>
+  <div class="stage" id="stage">
+    <div class="canvas-wrap" id="canvasWrap">
+      <div class="canvas" id="canvas" data-bg="checker"></div>
+    </div>
   </div>
 
+  <div class="side">
   <div class="palette-area">
     <div class="palette-row" id="paletteRow"></div>
     <div class="set-switch" id="setSwitch">
@@ -521,12 +615,6 @@ input[type="range"]::-moz-range-thumb {
     <input type="range" id="saturation" min="0" max="100" value="100">
     <input type="range" id="brightness" min="0" max="100" value="50">
   </div>
-
-  <div class="toolbar">
-    <button class="tool-btn" id="exportCanvasBtn">キャンバスJSON出力</button>
-    <button class="tool-btn" id="exportPaletteBtn">パレットJSON出力</button>
-    <button class="tool-btn" id="importBtn">JSONインポート</button>
-    <button class="tool-btn danger" id="clearBtn">キャンバスをクリア</button>
   </div>
 
   <footer class="copyright">© 2026 岩木しあん</footer>
@@ -680,9 +768,30 @@ bgSeg.addEventListener('click', e => { const b = e.target.closest('button'); if 
 
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
+const menuBtn = document.getElementById('menuBtn');
+const menuPop = document.getElementById('menuPop');
+function setSettingsOpen(open) {
+  settingsPanel.hidden = !open;
+  settingsBtn.classList.toggle('active', open);
+}
+function setMenuOpen(open) {
+  menuPop.hidden = !open;
+  menuBtn.classList.toggle('active', open);
+}
 settingsBtn.addEventListener('click', () => {
-  settingsPanel.hidden = !settingsPanel.hidden;
-  settingsBtn.classList.toggle('active', !settingsPanel.hidden);
+  const open = settingsPanel.hidden;
+  setSettingsOpen(open);
+  if (open) setMenuOpen(false);
+});
+menuBtn.addEventListener('click', () => {
+  const open = menuPop.hidden;
+  setMenuOpen(open);
+  if (open) setSettingsOpen(false);
+});
+// close the menu after picking an item, or when tapping anywhere outside it
+menuPop.addEventListener('click', e => { if (e.target.closest('.menu-item')) setMenuOpen(false); });
+document.addEventListener('pointerdown', e => {
+  if (!menuPop.hidden && !menuPop.contains(e.target) && !menuBtn.contains(e.target)) setMenuOpen(false);
 });
 
 /* ============ color helpers ============ */
@@ -925,7 +1034,23 @@ function buildCanvas() {
       canvas.appendChild(cell);
     }
   }
+  fitCanvas();
 }
+
+// on wide screens, scale the canvas to the largest size that fits the stage
+const stage = document.getElementById('stage');
+const canvasWrap = document.getElementById('canvasWrap');
+const wideMQ = matchMedia('(min-width: 700px)');
+const WRAP_EXTRA = 18; // canvas-wrap padding (8*2) + canvas border (1*2)
+function fitCanvas() {
+  if (!wideMQ.matches) { canvasWrap.style.width = ''; return; }
+  const availW = stage.clientWidth - WRAP_EXTRA;
+  const availH = stage.clientHeight - WRAP_EXTRA;
+  const cell = Math.max(1, Math.floor(Math.min(availW / width, availH / height)));
+  canvasWrap.style.width = (cell * width + WRAP_EXTRA) + 'px';
+}
+new ResizeObserver(fitCanvas).observe(stage);
+wideMQ.addEventListener('change', fitCanvas);
 
 let drawing = false;
 function paintAt(target) {
