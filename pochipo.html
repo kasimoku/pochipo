@@ -112,6 +112,7 @@ header {
   border: 1px solid rgba(255,255,255,0.1);
 }
 .cell {
+  min-width: 0;
   aspect-ratio: 1 / 1;
   box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.05);
 }
@@ -1130,7 +1131,6 @@ function applyCell(cell, col) {
   }
 }
 function buildCanvas() {
-  canvas.style.gridTemplateColumns = `repeat(${width}, 1fr)`;
   canvas.innerHTML = '';
   for (let r = 0; r < height; r++) {
     for (let c = 0; c < width; c++) {
@@ -1156,10 +1156,19 @@ const canvasWrap = document.getElementById('canvasWrap');
 const wideMQ = matchMedia('(min-width: 700px)');
 const WRAP_EXTRA = 18; // canvas-wrap padding (8*2) + canvas border (1*2)
 function fitCanvas() {
-  if (!wideMQ.matches) { canvasWrap.style.width = ''; return; }
+  if (!wideMQ.matches) {
+    // minmax(0, …) so cells can always shrink to fit (plain 1fr lets Safari overflow)
+    canvas.style.gridTemplateColumns = `repeat(${width}, minmax(0, 1fr))`;
+    canvas.style.gridAutoRows = '';
+    canvasWrap.style.width = '';
+    return;
+  }
   const availW = stage.clientWidth - WRAP_EXTRA;
   const availH = stage.clientHeight - WRAP_EXTRA;
   const cell = Math.max(1, Math.floor(Math.min(availW / width, availH / height)));
+  // fixed pixel tracks: the grid is exactly cell×width wide, never wider than its frame
+  canvas.style.gridTemplateColumns = `repeat(${width}, ${cell}px)`;
+  canvas.style.gridAutoRows = cell + 'px';
   canvasWrap.style.width = (cell * width + WRAP_EXTRA) + 'px';
 }
 new ResizeObserver(fitCanvas).observe(stage);
