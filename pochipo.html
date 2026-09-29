@@ -179,7 +179,9 @@ header {
 .layer .eye {
   width: 42px;
   flex-shrink: 0;
-  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-right: 1px solid rgba(255,255,255,0.08);
 }
 .layer .lsel {
@@ -190,7 +192,6 @@ header {
   padding: 0 12px;
 }
 .layer.active .lsel { color: #fff; }
-.layer.hidden-layer .eye { opacity: 0.3; }
 .layer.hidden-layer .lsel { color: #666; text-decoration: line-through; }
 
 /* ---- palette ---- */
@@ -632,11 +633,11 @@ input[type="range"]::-moz-range-thumb {
 
   <div class="layer-bar" id="layerBar">
     <div class="layer" data-l="0">
-      <button class="eye" data-l="0" title="表示 / 非表示">👁</button>
+      <button class="eye" data-l="0" title="表示 / 非表示"></button>
       <button class="lsel" data-l="0">レイヤー1</button>
     </div>
     <div class="layer" data-l="1">
-      <button class="eye" data-l="1" title="表示 / 非表示">👁</button>
+      <button class="eye" data-l="1" title="表示 / 非表示"></button>
       <button class="lsel" data-l="1">レイヤー2</button>
     </div>
   </div>
@@ -783,6 +784,7 @@ function updateLayerBar() {
     const l = +el.dataset.l;
     el.classList.toggle('active', l === activeLayer);
     el.classList.toggle('hidden-layer', !visible[l]);
+    el.querySelector('.eye').innerHTML = pixelSVG(visible[l] ? EYE_OPEN : EYE_CLOSED, 2);
   });
 }
 function selectLayer(l) {
@@ -1427,9 +1429,47 @@ const LOGO = {
     [3,3,3,3,3,3,3]
   ]
 };
-function renderLogo() {
-  const px = 5; // size of each logo pixel
-  const { width: w, height: h, grid: g, palette: pal } = LOGO;
+// layer visibility icons (12×12 pixel art)
+const EYE_OPEN = {
+  palette: { 0: null, 1: '#CFCFCF' },
+  width: 12, height: 12,
+  grid: [
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,1,1,1,1,0,0,0,0],
+    [0,0,1,1,0,0,0,0,1,1,0,0],
+    [0,1,0,0,1,1,1,1,0,0,1,0],
+    [1,0,0,0,1,0,1,1,0,0,0,1],
+    [1,0,0,0,1,0,0,1,0,0,0,1],
+    [0,1,0,0,1,1,1,1,0,0,1,0],
+    [0,0,1,1,0,0,0,0,1,1,0,0],
+    [0,0,0,0,1,1,1,1,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0]
+  ]
+};
+const EYE_CLOSED = {
+  palette: { 0: null, 1: '#CFCFCF' },
+  width: 12, height: 12,
+  grid: [
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [1,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,1],
+    [0,1,1,0,0,0,0,0,0,1,1,0],
+    [0,0,1,1,1,1,1,1,1,1,0,0],
+    [0,0,0,0,1,1,1,1,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0]
+  ]
+};
+
+// render pixel art ({ palette, width, height, grid }) as a crisp SVG string
+function pixelSVG(art, px) {
+  const { width: w, height: h, grid: g, palette: pal } = art;
   let rects = '';
   for (let r = 0; r < h; r++)
     for (let c = 0; c < w; c++) {
@@ -1437,8 +1477,10 @@ function renderLogo() {
       if (!col) continue;
       rects += `<rect x="${c * px}" y="${r * px}" width="${px}" height="${px}" fill="${col}"/>`;
     }
-  document.getElementById('logo').innerHTML =
-    `<svg width="${w * px}" height="${h * px}" viewBox="0 0 ${w * px} ${h * px}" shape-rendering="crispEdges">${rects}</svg>`;
+  return `<svg width="${w * px}" height="${h * px}" viewBox="0 0 ${w * px} ${h * px}" shape-rendering="crispEdges">${rects}</svg>`;
+}
+function renderLogo() {
+  document.getElementById('logo').innerHTML = pixelSVG(LOGO, 5); // 5px per logo pixel
 }
 
 /* ============ init ============ */
