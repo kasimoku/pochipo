@@ -592,7 +592,7 @@ input[type="range"]::-moz-range-thumb {
     <div class="header-right">
       <button class="icon-btn" id="undoBtn" title="元に戻す" disabled>↶</button>
       <button class="icon-btn" id="redoBtn" title="やり直し" disabled>↷</button>
-      <button class="icon-btn" id="settingsBtn" title="設定">⚙</button>
+      <button class="icon-btn" id="settingsBtn" title="設定"></button>
       <button class="icon-btn" id="menuBtn" title="出力・読み込み">☰</button>
     </div>
   </header>
@@ -1467,6 +1467,26 @@ const EYE_CLOSED = {
   ]
 };
 
+// settings icon (12×12 pixel art gear)
+const GEAR = {
+  palette: { 0: null, 1: '#A3A3A3', 2: '#CFCFCF', 3: '#5F6766' },
+  width: 12, height: 12,
+  grid: [
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,1,0,0,1,0,0,0,0],
+    [0,0,2,1,3,2,2,3,1,2,0,0],
+    [0,0,1,2,2,2,2,2,2,1,0,0],
+    [0,1,3,2,3,3,3,3,2,3,1,0],
+    [0,0,2,2,3,2,2,3,2,2,0,0],
+    [0,0,2,2,3,2,2,3,2,1,0,0],
+    [0,1,3,2,3,3,3,3,2,3,2,0],
+    [0,0,1,1,2,2,2,2,1,1,0,0],
+    [0,0,2,1,3,2,2,3,1,2,0,0],
+    [0,0,0,0,1,0,0,1,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0]
+  ]
+};
+
 // render pixel art ({ palette, width, height, grid }) as a crisp SVG string
 function pixelSVG(art, px) {
   const { width: w, height: h, grid: g, palette: pal } = art;
@@ -1485,6 +1505,7 @@ function renderLogo() {
 
 /* ============ init ============ */
 renderLogo();
+settingsBtn.innerHTML = pixelSVG(GEAR, 2);
 document.addEventListener('pointermove', onDocPointerMove, { passive: false });
 document.addEventListener('pointerup', endDrag);
 document.addEventListener('pointercancel', endDrag);
