@@ -1385,23 +1385,30 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   showToast('クリアしました');
 });
 
-/* ============ flip / shift (all layers of the active canvas, or only the selection) ============ */
-// move the selected cells (all layers) to new positions given by dest(r, c) -> [r, c];
+/* ============ flip / shift (active layer only; whole layer, or only the selection) ============ */
+// editing a hidden layer would be invisible — reveal it first (same as painting)
+function revealActiveLayer() {
+  if (visible[activeLayer]) return;
+  setLayerVisible(activeLayer, true);
+  showToast(`レイヤー${activeLayer + 1}を表示しました`);
+}
+// move the selected cells of the active layer to new positions given by dest(r, c) -> [r, c];
 // the selection moves with them and the cells they leave become transparent
 function moveSelection(dest) {
   const cells = [];
   for (let r = 0; r < height; r++) for (let c = 0; c < width; c++) if (sel[r][c]) cells.push([r, c]);
   const newSel = sel.map(row => row.map(() => false));
-  layers = layers.map(g => {
-    const ng = g.map(row => row.slice());
-    cells.forEach(([r, c]) => { ng[r][c] = null; });
-    cells.forEach(([r, c]) => { const [nr, nc] = dest(r, c); ng[nr][nc] = g[r][c]; });
-    return ng;
-  });
+  const g = layers[activeLayer];
+  const ng = g.map(row => row.slice());
+  cells.forEach(([r, c]) => { ng[r][c] = null; });
+  // transparent cells in the selection don't erase what they land on
+  cells.forEach(([r, c]) => { const [nr, nc] = dest(r, c); if (g[r][c]) ng[nr][nc] = g[r][c]; });
+  layers[activeLayer] = ng;
   cells.forEach(([r, c]) => { const [nr, nc] = dest(r, c); newSel[nr][nc] = true; });
   sel = newSel;
 }
 function flipH() {
+  revealActiveLayer();
   pushUndo();
   if (sel) {
     // mirror within the selection's own left-right extent
@@ -1409,16 +1416,17 @@ function flipH() {
     sel.forEach(row => row.forEach((on, c) => { if (on) { minC = Math.min(minC, c); maxC = Math.max(maxC, c); } }));
     moveSelection((r, c) => [r, minC + maxC - c]);
   } else {
-    layers = layers.map(g => g.map(row => row.slice().reverse()));
+    layers[activeLayer] = layers[activeLayer].map(row => row.slice().reverse());
   }
   redrawCells();
   save();
 }
-// move the whole picture one cell; pixels pushed off one edge wrap around to the other.
+// move the whole layer one cell; pixels pushed off one edge wrap around to the other.
 // with a selection, only the selected cells move, and they stop at the canvas edge
 const SHIFT_DIR = { left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0] };
 function shiftAll(dir) {
   const [dr, dc] = SHIFT_DIR[dir];
+  revealActiveLayer();
   if (sel) {
     const blocked = sel.some((row, r) => row.some((on, c) =>
       on && (r + dr < 0 || r + dr >= height || c + dc < 0 || c + dc >= width)));
@@ -1427,8 +1435,9 @@ function shiftAll(dir) {
     moveSelection((r, c) => [r + dr, c + dc]);
   } else {
     pushUndo();
-    layers = layers.map(g => g.map((row, r) => row.map((_, c) =>
-      g[(r - dr + height) % height][(c - dc + width) % width])));
+    const g = layers[activeLayer];
+    layers[activeLayer] = g.map((row, r) => row.map((_, c) =>
+      g[(r - dr + height) % height][(c - dc + width) % width]));
   }
   redrawCells();
   save();
