@@ -195,6 +195,10 @@ header {
 .layer.active .lsel { color: #fff; }
 .layer.hidden-layer .lsel { color: #666; text-decoration: line-through; }
 
+/* ---- edit bar (flip / shift) ---- */
+.edit-bar { display: flex; gap: 6px; align-items: center; }
+.edit-bar .sep { width: 1px; height: 22px; background: rgba(255,255,255,0.12); margin: 0 4px; }
+
 /* ---- palette ---- */
 .palette-area {
   display: flex;
@@ -540,12 +544,13 @@ input[type="range"]::-moz-range-thumb {
     padding: 16px 20px 10px;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
-    grid-template-areas: "header" "tabs" "layers" "stage" "side" "footer";
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "header" "tabs" "layers" "edit" "stage" "side" "footer";
   }
   header { grid-area: header; }
   .canvas-tabs { grid-area: tabs; }
   .layer-bar { grid-area: layers; }
+  .edit-bar { grid-area: edit; }
   .stage {
     grid-area: stage;
     min-height: 0;
@@ -578,8 +583,8 @@ input[type="range"]::-moz-range-thumb {
 @media (min-width: 700px) and (orientation: landscape) {
   .app {
     grid-template-columns: minmax(0, 1fr) 360px;
-    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-    grid-template-areas: "header header" "tabs side" "layers side" "stage side" "footer footer";
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "header header" "tabs side" "layers side" "edit side" "stage side" "footer footer";
   }
   .side { min-height: 0; overflow-y: auto; }
 }
@@ -641,6 +646,15 @@ input[type="range"]::-moz-range-thumb {
       <button class="eye" data-l="1" title="表示 / 非表示"></button>
       <button class="lsel" data-l="1">レイヤー2</button>
     </div>
+  </div>
+
+  <div class="edit-bar" id="editBar">
+    <button class="icon-btn" id="flipBtn" title="左右反転"></button>
+    <span class="sep"></span>
+    <button class="icon-btn" data-shift="left" title="左へ1マス移動"></button>
+    <button class="icon-btn" data-shift="up" title="上へ1マス移動"></button>
+    <button class="icon-btn" data-shift="down" title="下へ1マス移動"></button>
+    <button class="icon-btn" data-shift="right" title="右へ1マス移動"></button>
   </div>
 
   <div class="stage" id="stage">
@@ -1224,6 +1238,29 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   showToast('クリアしました');
 });
 
+/* ============ flip / shift (all layers of the active canvas) ============ */
+function flipH() {
+  pushUndo();
+  layers = layers.map(g => g.map(row => row.slice().reverse()));
+  redrawCells();
+  save();
+}
+// move the whole picture one cell; pixels pushed off one edge wrap around to the other
+const SHIFT_DIR = { left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0] };
+function shiftAll(dir) {
+  const [dr, dc] = SHIFT_DIR[dir];
+  pushUndo();
+  layers = layers.map(g => g.map((row, r) => row.map((_, c) =>
+    g[(r - dr + height) % height][(c - dc + width) % width])));
+  redrawCells();
+  save();
+}
+document.getElementById('flipBtn').addEventListener('click', flipH);
+document.getElementById('editBar').addEventListener('click', e => {
+  const b = e.target.closest('[data-shift]');
+  if (b) shiftAll(b.dataset.shift);
+});
+
 /* ============ JSON build ============ */
 function buildCanvasJSON() {
   // export what is currently shown: visible layers flattened into one grid
@@ -1496,6 +1533,52 @@ const GEAR = {
   ]
 };
 
+// flip icon (12×12 pixel art: two triangles mirrored around a dashed axis)
+const FLIP = {
+  palette: { 0: null, 1: '#CFCFCF', 2: '#7A7A7A' },
+  width: 12, height: 12,
+  grid: [
+    [0,0,0,0,0,2,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,1,2,0,1,0,0,0,0],
+    [0,0,0,1,1,0,0,1,1,0,0,0],
+    [0,0,1,1,1,2,0,1,1,1,0,0],
+    [0,1,1,1,1,0,0,1,1,1,1,0],
+    [0,1,1,1,1,2,0,1,1,1,1,0],
+    [0,0,1,1,1,0,0,1,1,1,0,0],
+    [0,0,0,1,1,2,0,1,1,0,0,0],
+    [0,0,0,0,1,0,0,1,0,0,0,0],
+    [0,0,0,0,0,2,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0]
+  ]
+};
+// shift icon (12×12 pixel art arrow pointing right; other directions are rotations)
+const ARROW_RIGHT = {
+  palette: { 0: null, 1: '#CFCFCF' },
+  width: 12, height: 12,
+  grid: [
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,1,0,0,0,0,0],
+    [0,0,0,0,0,0,1,1,0,0,0,0],
+    [0,0,0,0,0,0,1,1,1,0,0,0],
+    [0,0,1,1,1,1,1,1,1,1,0,0],
+    [0,0,1,1,1,1,1,1,1,1,1,0],
+    [0,0,1,1,1,1,1,1,1,1,1,0],
+    [0,0,1,1,1,1,1,1,1,1,0,0],
+    [0,0,0,0,0,0,1,1,1,0,0,0],
+    [0,0,0,0,0,0,1,1,0,0,0,0],
+    [0,0,0,0,0,0,1,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0]
+  ]
+};
+// rotate square pixel art 90° clockwise `times` times
+function rotateArt(art, times) {
+  let g = art.grid;
+  for (let t = 0; t < times; t++) g = g[0].map((_, c) => g.map(row => row[c]).reverse());
+  return { ...art, grid: g };
+}
+const ARROWS = { right: ARROW_RIGHT, down: rotateArt(ARROW_RIGHT, 1), left: rotateArt(ARROW_RIGHT, 2), up: rotateArt(ARROW_RIGHT, 3) };
+
 // render pixel art ({ palette, width, height, grid }) as a crisp SVG string
 function pixelSVG(art, px) {
   const { width: w, height: h, grid: g, palette: pal } = art;
@@ -1515,6 +1598,8 @@ function renderLogo() {
 /* ============ init ============ */
 renderLogo();
 settingsBtn.innerHTML = pixelSVG(GEAR, 2);
+document.getElementById('flipBtn').innerHTML = pixelSVG(FLIP, 2);
+document.querySelectorAll('[data-shift]').forEach(b => { b.innerHTML = pixelSVG(ARROWS[b.dataset.shift], 2); });
 document.addEventListener('pointermove', onDocPointerMove, { passive: false });
 document.addEventListener('pointerup', endDrag);
 document.addEventListener('pointercancel', endDrag);
