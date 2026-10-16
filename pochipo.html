@@ -74,6 +74,7 @@ header {
 .icon-btn:disabled { opacity: 0.35; cursor: default; }
 .icon-btn:disabled:hover { background: rgba(255,255,255,0.08); }
 .icon-btn.active { background: rgba(255,255,255,0.22); }
+.icon-btn[hidden] { display: none; }
 
 /* ---- size control ---- */
 .size-ctrl {
@@ -112,9 +113,19 @@ header {
   border: 1px solid rgba(255,255,255,0.1);
 }
 .cell {
+  position: relative;
   min-width: 0;
   aspect-ratio: 1 / 1;
   box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.05);
+}
+/* selected cells: light tint + outline only on the selection's outer edges (--sel-edges set from JS) */
+.cell.sel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(79,195,247,0.22);
+  box-shadow: var(--sel-edges, none);
 }
 .cell.transparent {
   background-color: #22222f;
@@ -196,8 +207,8 @@ header {
 .layer.hidden-layer .lsel { color: #666; text-decoration: line-through; }
 
 /* ---- edit bar (flip / shift) ---- */
-.edit-bar { display: flex; gap: 6px; align-items: center; }
-.edit-bar .sep { width: 1px; height: 22px; background: rgba(255,255,255,0.12); margin: 0 4px; }
+.edit-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.edit-bar .sep { width: 1px; height: 22px; background: rgba(255,255,255,0.12); }
 
 /* ---- palette ---- */
 .palette-area {
@@ -657,6 +668,8 @@ input[type="range"]::-moz-range-thumb {
     <button class="icon-btn" data-shift="right" title="右へ1マス移動"></button>
     <span class="sep"></span>
     <button class="icon-btn" id="spoidBtn" title="スポイト（キャンバスの色を拾う）"></button>
+    <button class="icon-btn" id="selectBtn" title="選択（タップ / なぞってマスを選ぶ）"></button>
+    <button class="icon-btn" id="deselectBtn" title="選択解除" hidden></button>
   </div>
 
   <div class="stage" id="stage">
@@ -761,7 +774,8 @@ function snapshot() {
     canvases: canvases.map(c => ({ width: c.width, height: c.height, layers: copyLayers(c.layers) })),
     current,
     paletteSets: paletteSets.map(p => p.slice()),
-    currentSet, activeIndex
+    currentSet, activeIndex,
+    sel: sel && sel.map(r => r.slice())
   };
 }
 function restoreSnapshot(s) {
@@ -775,6 +789,7 @@ function restoreSnapshot(s) {
   currentSet = s.currentSet;
   paletteColors = paletteSets[currentSet];
   activeIndex = s.activeIndex;
+  sel = s.sel ? s.sel.map(r => r.slice()) : null;
   loadActive();
   buildCanvas(); renderPalette(); updateTabs(); updateSetBtns(); save();
 }
@@ -787,6 +802,7 @@ function switchCanvas(i) {
   syncActive();
   current = i;
   loadActive();
+  sel = null; // selection belongs to the canvas being edited
   undoStack = []; redoStack = []; updateHistoryBtns(); // history is per editing session on a canvas
   buildCanvas(); updateTabs(); save();
 }
@@ -1161,12 +1177,14 @@ function buildCanvas() {
       canvas.appendChild(cell);
     }
   }
+  renderSel();
   fitCanvas();
 }
 
 // repaint every cell from the layers without rebuilding the DOM
 function redrawCells() {
   for (const cell of canvas.children) applyCell(cell, composite(+cell.dataset.r, +cell.dataset.c));
+  renderSel();
 }
 
 // on wide screens, scale the canvas to the largest size that fits the stage
@@ -1197,6 +1215,7 @@ wideMQ.addEventListener('change', fitCanvas);
 let spoidMode = false;
 const spoidBtn = document.getElementById('spoidBtn');
 function setSpoidMode(on) {
+  if (on) setSelectMode(false);
   spoidMode = on;
   spoidBtn.classList.toggle('active', on);
   canvas.style.cursor = on ? 'copy' : '';
@@ -1219,6 +1238,50 @@ function pickAt(target) {
   }
 }
 
+/* ---- cell selection: sel[r][c] = true for selected cells, or null when nothing is selected ---- */
+let sel = null;
+let selectMode = false;
+let selDrag = null; // true = adding cells, false = removing cells (decided by the first cell touched)
+const selectBtn = document.getElementById('selectBtn');
+const deselectBtn = document.getElementById('deselectBtn');
+const SEL_EDGE = '#4FC3F7';
+function setSelectMode(on) {
+  if (on) setSpoidMode(false);
+  selectMode = on;
+  selectBtn.classList.toggle('active', on);
+}
+selectBtn.addEventListener('click', () => setSelectMode(!selectMode));
+deselectBtn.addEventListener('click', () => { sel = null; renderSel(); });
+const isSel = (r, c) => !!(sel && r >= 0 && r < height && c >= 0 && c < width && sel[r][c]);
+function cellEl(r, c) { return canvas.children[r * width + c]; }
+function updateSelCell(r, c) {
+  const el = cellEl(r, c);
+  if (!el) return;
+  if (!isSel(r, c)) { el.classList.remove('sel'); return; }
+  const e = [];
+  if (!isSel(r - 1, c)) e.push(`inset 0 2px 0 ${SEL_EDGE}`);
+  if (!isSel(r + 1, c)) e.push(`inset 0 -2px 0 ${SEL_EDGE}`);
+  if (!isSel(r, c - 1)) e.push(`inset 2px 0 0 ${SEL_EDGE}`);
+  if (!isSel(r, c + 1)) e.push(`inset -2px 0 0 ${SEL_EDGE}`);
+  el.style.setProperty('--sel-edges', e.join(',') || 'none');
+  el.classList.add('sel');
+}
+function renderSel() {
+  if (sel && (sel.length !== height || sel[0].length !== width || !sel.some(row => row.includes(true)))) sel = null;
+  for (let r = 0; r < height; r++) for (let c = 0; c < width; c++) updateSelCell(r, c);
+  deselectBtn.hidden = !sel;
+}
+function selectAt(target) {
+  if (!target || !target.classList || !target.classList.contains('cell')) return;
+  const r = +target.dataset.r, c = +target.dataset.c;
+  if (selDrag === null) selDrag = !isSel(r, c);
+  if (isSel(r, c) === selDrag) return;
+  if (!sel) sel = emptyGrid(width, height).map(row => row.map(() => false));
+  sel[r][c] = selDrag;
+  // only this cell and its neighbours' outlines can change
+  [[r, c], [r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].forEach(([rr, cc]) => updateSelCell(rr, cc));
+}
+
 let drawing = false;
 function paintAt(target) {
   if (!target || !target.classList || !target.classList.contains('cell')) return;
@@ -1237,6 +1300,12 @@ canvas.addEventListener('pointerdown', e => {
     e.preventDefault();
     return;
   }
+  if (selectMode) {
+    selDrag = null;
+    selectAt(e.target);
+    e.preventDefault();
+    return;
+  }
   if (!visible[activeLayer]) {
     // drawing on a hidden layer would be invisible — reveal it first
     setLayerVisible(activeLayer, true);
@@ -1248,11 +1317,12 @@ canvas.addEventListener('pointerdown', e => {
   e.preventDefault();
 });
 canvas.addEventListener('pointermove', e => {
+  if (selDrag !== null) { selectAt(document.elementFromPoint(e.clientX, e.clientY)); return; }
   if (!drawing) return;
   paintAt(document.elementFromPoint(e.clientX, e.clientY));
 });
-window.addEventListener('pointerup', () => { drawing = false; });
-window.addEventListener('pointercancel', () => { drawing = false; });
+window.addEventListener('pointerup', () => { drawing = false; selDrag = null; renderSel(); });
+window.addEventListener('pointercancel', () => { drawing = false; selDrag = null; renderSel(); });
 
 /* ============ resize ============ */
 function doResize(newW, newH) {
@@ -1275,20 +1345,51 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   showToast('クリアしました');
 });
 
-/* ============ flip / shift (all layers of the active canvas) ============ */
+/* ============ flip / shift (all layers of the active canvas, or only the selection) ============ */
+// move the selected cells (all layers) to new positions given by dest(r, c) -> [r, c];
+// the selection moves with them and the cells they leave become transparent
+function moveSelection(dest) {
+  const cells = [];
+  for (let r = 0; r < height; r++) for (let c = 0; c < width; c++) if (sel[r][c]) cells.push([r, c]);
+  const newSel = sel.map(row => row.map(() => false));
+  layers = layers.map(g => {
+    const ng = g.map(row => row.slice());
+    cells.forEach(([r, c]) => { ng[r][c] = null; });
+    cells.forEach(([r, c]) => { const [nr, nc] = dest(r, c); ng[nr][nc] = g[r][c]; });
+    return ng;
+  });
+  cells.forEach(([r, c]) => { const [nr, nc] = dest(r, c); newSel[nr][nc] = true; });
+  sel = newSel;
+}
 function flipH() {
   pushUndo();
-  layers = layers.map(g => g.map(row => row.slice().reverse()));
+  if (sel) {
+    // mirror within the selection's own left-right extent
+    let minC = width, maxC = -1;
+    sel.forEach(row => row.forEach((on, c) => { if (on) { minC = Math.min(minC, c); maxC = Math.max(maxC, c); } }));
+    moveSelection((r, c) => [r, minC + maxC - c]);
+  } else {
+    layers = layers.map(g => g.map(row => row.slice().reverse()));
+  }
   redrawCells();
   save();
 }
-// move the whole picture one cell; pixels pushed off one edge wrap around to the other
+// move the whole picture one cell; pixels pushed off one edge wrap around to the other.
+// with a selection, only the selected cells move, and they stop at the canvas edge
 const SHIFT_DIR = { left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0] };
 function shiftAll(dir) {
   const [dr, dc] = SHIFT_DIR[dir];
-  pushUndo();
-  layers = layers.map(g => g.map((row, r) => row.map((_, c) =>
-    g[(r - dr + height) % height][(c - dc + width) % width])));
+  if (sel) {
+    const blocked = sel.some((row, r) => row.some((on, c) =>
+      on && (r + dr < 0 || r + dr >= height || c + dc < 0 || c + dc >= width)));
+    if (blocked) { showToast('これ以上は動かせません'); return; }
+    pushUndo();
+    moveSelection((r, c) => [r + dr, c + dc]);
+  } else {
+    pushUndo();
+    layers = layers.map(g => g.map((row, r) => row.map((_, c) =>
+      g[(r - dr + height) % height][(c - dc + width) % width])));
+  }
   redrawCells();
   save();
 }
@@ -1636,6 +1737,44 @@ const SPOID = {
   ]
 };
 
+// selection icons (12×12 pixel art: dashed square / dashed square with ×)
+const SELECT = {
+  palette: { 0: null, 1: '#CFCFCF' },
+  width: 12, height: 12,
+  grid: [
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,1,1,0,1,1,0,1,1,0,1,0],
+    [0,1,0,0,0,0,0,0,0,0,1,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,1,0,0,0,0,0,0,0,0,1,0],
+    [0,1,0,0,0,0,0,0,0,0,1,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,1,0,0,0,0,0,0,0,0,1,0],
+    [0,1,0,0,0,0,0,0,0,0,1,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,1,1,0,1,1,0,1,1,0,1,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0]
+  ]
+};
+const DESELECT = {
+  palette: { 0: null, 1: '#7A7A7A', 2: '#CFCFCF' },
+  width: 12, height: 12,
+  grid: [
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,1,1,0,1,1,0,1,1,0,1,0],
+    [0,1,0,0,0,0,0,0,0,0,1,0],
+    [0,0,0,2,0,0,0,0,2,0,0,0],
+    [0,1,0,0,2,0,0,2,0,0,1,0],
+    [0,1,0,0,0,2,2,0,0,0,1,0],
+    [0,0,0,0,0,2,2,0,0,0,0,0],
+    [0,1,0,0,2,0,0,2,0,0,1,0],
+    [0,1,0,2,0,0,0,0,2,0,1,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,1,1,0,1,1,0,1,1,0,1,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0]
+  ]
+};
+
 // render pixel art ({ palette, width, height, grid }) as a crisp SVG string
 function pixelSVG(art, px) {
   const { width: w, height: h, grid: g, palette: pal } = art;
@@ -1657,6 +1796,8 @@ renderLogo();
 settingsBtn.innerHTML = pixelSVG(GEAR, 2);
 document.getElementById('flipBtn').innerHTML = pixelSVG(FLIP, 2);
 spoidBtn.innerHTML = pixelSVG(SPOID, 2);
+selectBtn.innerHTML = pixelSVG(SELECT, 2);
+deselectBtn.innerHTML = pixelSVG(DESELECT, 2);
 document.querySelectorAll('[data-shift]').forEach(b => { b.innerHTML = pixelSVG(ARROWS[b.dataset.shift], 2); });
 document.addEventListener('pointermove', onDocPointerMove, { passive: false });
 document.addEventListener('pointerup', endDrag);
