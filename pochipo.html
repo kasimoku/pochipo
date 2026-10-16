@@ -655,6 +655,8 @@ input[type="range"]::-moz-range-thumb {
     <button class="icon-btn" data-shift="up" title="上へ1マス移動"></button>
     <button class="icon-btn" data-shift="down" title="下へ1マス移動"></button>
     <button class="icon-btn" data-shift="right" title="右へ1マス移動"></button>
+    <span class="sep"></span>
+    <button class="icon-btn" id="spoidBtn" title="スポイト（キャンバスの色を拾う）"></button>
   </div>
 
   <div class="stage" id="stage">
@@ -925,7 +927,9 @@ function isLightColor(hex) {
 }
 
 /* ============ picker ============ */
+let exactHex = null; // color loaded by the eyedropper, kept exact until a slider moves (HSL rounding would shift it)
 function currentHex() {
+  if (exactHex) return exactHex;
   const [r, g, b] = hslToRgb(+hueSlider.value, +satSlider.value, +brtSlider.value);
   return rgbToHex(r, g, b);
 }
@@ -943,7 +947,7 @@ function updatePicker() {
   satSlider.style.background = `linear-gradient(to right, ${satStops.join(',')})`;
   brtSlider.style.background = `linear-gradient(to right, ${brtStops.join(',')})`;
 }
-[hueSlider, satSlider, brtSlider].forEach(s => s.addEventListener('input', updatePicker));
+[hueSlider, satSlider, brtSlider].forEach(s => s.addEventListener('input', () => { exactHex = null; updatePicker(); }));
 
 /* ============ palette ============ */
 function renderPalette() {
@@ -999,6 +1003,7 @@ function loadColorToPicker(hex) {
   const b = parseInt(hex.slice(5, 7), 16);
   const [h, s, l] = rgbToHsl(r, g, b);
   hueSlider.value = h; satSlider.value = s; brtSlider.value = l;
+  exactHex = hex.toUpperCase();
   updatePicker();
 }
 
@@ -1188,6 +1193,32 @@ function fitCanvas() {
 new ResizeObserver(fitCanvas).observe(stage);
 wideMQ.addEventListener('change', fitCanvas);
 
+/* ---- eyedropper: one-shot pick of the visible color under the tap ---- */
+let spoidMode = false;
+const spoidBtn = document.getElementById('spoidBtn');
+function setSpoidMode(on) {
+  spoidMode = on;
+  spoidBtn.classList.toggle('active', on);
+  canvas.style.cursor = on ? 'copy' : '';
+}
+spoidBtn.addEventListener('click', () => setSpoidMode(!spoidMode));
+function pickAt(target) {
+  if (!target || !target.classList || !target.classList.contains('cell')) return;
+  const col = composite(+target.dataset.r, +target.dataset.c);
+  if (!col) {
+    selectIndex(0);
+    showToast('透明を選びました');
+    return;
+  }
+  const i = paletteColors.indexOf(col);
+  if (i !== -1) {
+    selectIndex(i);
+  } else {
+    loadColorToPicker(col);
+    showToast(col + ' を拾いました（＋でパレット追加）');
+  }
+}
+
 let drawing = false;
 function paintAt(target) {
   if (!target || !target.classList || !target.classList.contains('cell')) return;
@@ -1200,6 +1231,12 @@ function paintAt(target) {
   scheduleSave();
 }
 canvas.addEventListener('pointerdown', e => {
+  if (spoidMode || e.altKey) {
+    pickAt(e.target);
+    setSpoidMode(false);
+    e.preventDefault();
+    return;
+  }
   if (!visible[activeLayer]) {
     // drawing on a hidden layer would be invisible — reveal it first
     setLayerVisible(activeLayer, true);
@@ -1579,6 +1616,26 @@ function rotateArt(art, times) {
 }
 const ARROWS = { right: ARROW_RIGHT, down: rotateArt(ARROW_RIGHT, 1), left: rotateArt(ARROW_RIGHT, 2), up: rotateArt(ARROW_RIGHT, 3) };
 
+// eyedropper icon (12×12 pixel art)
+const SPOID = {
+  palette: { 0: null, 1: '#CFCFCF', 2: '#7A7A7A' },
+  width: 12, height: 12,
+  grid: [
+    [0,0,0,0,0,0,0,0,0,1,1,0],
+    [0,0,0,0,0,0,0,0,1,1,1,1],
+    [0,0,0,0,0,0,1,1,1,1,1,1],
+    [0,0,0,0,0,0,0,1,1,1,1,0],
+    [0,0,0,0,0,0,2,0,1,1,0,0],
+    [0,0,0,0,0,2,0,2,0,1,0,0],
+    [0,0,0,0,2,0,2,0,0,0,0,0],
+    [0,0,0,2,0,2,0,0,0,0,0,0],
+    [0,0,2,0,2,0,0,0,0,0,0,0],
+    [0,2,1,2,0,0,0,0,0,0,0,0],
+    [1,1,2,0,0,0,0,0,0,0,0,0],
+    [1,1,0,0,0,0,0,0,0,0,0,0]
+  ]
+};
+
 // render pixel art ({ palette, width, height, grid }) as a crisp SVG string
 function pixelSVG(art, px) {
   const { width: w, height: h, grid: g, palette: pal } = art;
@@ -1599,6 +1656,7 @@ function renderLogo() {
 renderLogo();
 settingsBtn.innerHTML = pixelSVG(GEAR, 2);
 document.getElementById('flipBtn').innerHTML = pixelSVG(FLIP, 2);
+spoidBtn.innerHTML = pixelSVG(SPOID, 2);
 document.querySelectorAll('[data-shift]').forEach(b => { b.innerHTML = pixelSVG(ARROWS[b.dataset.shift], 2); });
 document.addEventListener('pointermove', onDocPointerMove, { passive: false });
 document.addEventListener('pointerup', endDrag);
