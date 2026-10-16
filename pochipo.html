@@ -209,6 +209,11 @@ header {
 /* ---- edit bar (flip / shift) ---- */
 .edit-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .edit-bar .sep { width: 1px; height: 22px; background: rgba(255,255,255,0.12); }
+@media (max-width: 420px) {
+  /* keep all tool buttons on one row on phones */
+  .edit-bar { gap: 4px; }
+  .edit-bar .icon-btn { width: 33px; }
+}
 
 /* ---- palette ---- */
 .palette-area {
@@ -667,6 +672,7 @@ input[type="range"]::-moz-range-thumb {
     <button class="icon-btn" data-shift="down" title="下へ1マス移動"></button>
     <button class="icon-btn" data-shift="right" title="右へ1マス移動"></button>
     <span class="sep"></span>
+    <button class="icon-btn" id="bucketBtn" title="バケツ（同じ色のつながった範囲を塗る）"></button>
     <button class="icon-btn" id="spoidBtn" title="スポイト（キャンバスの色を拾う）"></button>
     <button class="icon-btn" id="selectBtn" title="選択（タップ / なぞってマスを選ぶ）"></button>
     <button class="icon-btn" id="deselectBtn" title="選択解除" hidden></button>
@@ -1215,7 +1221,7 @@ wideMQ.addEventListener('change', fitCanvas);
 let spoidMode = false;
 const spoidBtn = document.getElementById('spoidBtn');
 function setSpoidMode(on) {
-  if (on) setSelectMode(false);
+  if (on) { setSelectMode(false); setBucketMode(false); }
   spoidMode = on;
   spoidBtn.classList.toggle('active', on);
   canvas.style.cursor = on ? 'copy' : '';
@@ -1246,7 +1252,7 @@ const selectBtn = document.getElementById('selectBtn');
 const deselectBtn = document.getElementById('deselectBtn');
 const SEL_EDGE = '#4FC3F7';
 function setSelectMode(on) {
-  if (on) setSpoidMode(false);
+  if (on) { setSpoidMode(false); setBucketMode(false); }
   selectMode = on;
   selectBtn.classList.toggle('active', on);
 }
@@ -1282,6 +1288,35 @@ function selectAt(target) {
   [[r, c], [r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].forEach(([rr, cc]) => updateSelCell(rr, cc));
 }
 
+/* ---- bucket: flood-fill the 4-connected same-color area of the active layer (inside the selection if any) ---- */
+let bucketMode = false;
+const bucketBtn = document.getElementById('bucketBtn');
+function setBucketMode(on) {
+  if (on) { setSpoidMode(false); setSelectMode(false); }
+  bucketMode = on;
+  bucketBtn.classList.toggle('active', on);
+}
+bucketBtn.addEventListener('click', () => setBucketMode(!bucketMode));
+function fillAt(target) {
+  if (!target || !target.classList || !target.classList.contains('cell')) return;
+  const r0 = +target.dataset.r, c0 = +target.dataset.c;
+  if (sel && !sel[r0][c0]) return;
+  const col = activeIndex === 0 ? null : (paletteColors[activeIndex] || null);
+  const g = layers[activeLayer];
+  const from = g[r0][c0];
+  if (from === col) return;
+  pushUndo();
+  const stack = [[r0, c0]];
+  while (stack.length) {
+    const [r, c] = stack.pop();
+    if (r < 0 || r >= height || c < 0 || c >= width || g[r][c] !== from || (sel && !sel[r][c])) continue;
+    g[r][c] = col;
+    stack.push([r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]);
+  }
+  redrawCells();
+  save();
+}
+
 let drawing = false;
 function paintAt(target) {
   if (!target || !target.classList || !target.classList.contains('cell')) return;
@@ -1310,6 +1345,11 @@ canvas.addEventListener('pointerdown', e => {
     // drawing on a hidden layer would be invisible — reveal it first
     setLayerVisible(activeLayer, true);
     showToast(`レイヤー${activeLayer + 1}を表示しました`);
+  }
+  if (bucketMode) {
+    fillAt(e.target);
+    e.preventDefault();
+    return;
   }
   drawing = true;
   pushUndo();
@@ -1717,6 +1757,26 @@ function rotateArt(art, times) {
 }
 const ARROWS = { right: ARROW_RIGHT, down: rotateArt(ARROW_RIGHT, 1), left: rotateArt(ARROW_RIGHT, 2), up: rotateArt(ARROW_RIGHT, 3) };
 
+// bucket icon (12×12 pixel art: tilted pail with paint dripping from the lip)
+const BUCKET = {
+  palette: { 0: null, 1: '#CFCFCF', 2: '#7A7A7A', 3: '#4FC3F7' },
+  width: 12, height: 12,
+  grid: [
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,2,2,0,0,0,0,0,0],
+    [0,0,0,2,0,0,2,0,0,0,0,0],
+    [0,0,0,1,1,0,0,2,0,0,0,0],
+    [0,0,1,1,1,1,0,0,2,0,0,0],
+    [0,1,1,1,1,1,1,0,0,3,0,0],
+    [0,0,1,1,1,1,1,1,3,3,3,0],
+    [0,0,0,1,1,1,1,1,3,3,3,0],
+    [0,0,0,0,1,1,1,0,0,3,3,0],
+    [0,0,0,0,0,1,0,0,0,0,3,0],
+    [0,0,0,0,0,0,0,0,0,0,3,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0]
+  ]
+};
+
 // eyedropper icon (12×12 pixel art)
 const SPOID = {
   palette: { 0: null, 1: '#CFCFCF', 2: '#7A7A7A' },
@@ -1796,6 +1856,7 @@ renderLogo();
 settingsBtn.innerHTML = pixelSVG(GEAR, 2);
 document.getElementById('flipBtn').innerHTML = pixelSVG(FLIP, 2);
 spoidBtn.innerHTML = pixelSVG(SPOID, 2);
+bucketBtn.innerHTML = pixelSVG(BUCKET, 2);
 selectBtn.innerHTML = pixelSVG(SELECT, 2);
 deselectBtn.innerHTML = pixelSVG(DESELECT, 2);
 document.querySelectorAll('[data-shift]').forEach(b => { b.innerHTML = pixelSVG(ARROWS[b.dataset.shift], 2); });
