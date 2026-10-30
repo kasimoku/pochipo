@@ -17,6 +17,10 @@
 /* iOS Safari ignores user-scalable=no: stop quick repeated taps from double-tap zooming
    (pinch zoom still works; the canvas / swatches keep their own touch-action: none) */
 * { touch-action: manipulation; }
+/* long-pressing the canvas made iOS select nearby text / show the callout: an app UI, so no text
+   selection except where text is typed */
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -1375,6 +1379,8 @@ function paintAt(target) {
   applyCell(target, displayColor(r, c));
   scheduleSave();
 }
+// no long-press / right-click menu over the drawing area
+canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('pointerdown', e => {
   if (spoidMode || e.altKey) {
     pickAt(e.target);
