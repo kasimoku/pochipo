@@ -860,7 +860,7 @@ layerBar.addEventListener('click', e => {
   else selectLayer(l);
 });
 // the pixel color at (r, c): topmost visible (or half) layer that has a pixel there.
-// used for eyedropper / export, so half layers count at full strength
+// used for export (and the eyedropper where nothing opaque is beneath), so half layers count at full strength
 function composite(r, c) {
   for (let l = LAYER_COUNT - 1; l >= 0; l--) {
     if (visible[l] && layers[l][r][c]) return layers[l][r][c];
@@ -882,7 +882,7 @@ function displayColor(r, c) {
     a = na;
   }
   if (!a) return { col: null, alpha: 0 };
-  return { col: `rgb(${Math.round(cr)}, ${Math.round(cg)}, ${Math.round(cb)})`, alpha: a };
+  return { col: rgbToHex(Math.round(cr), Math.round(cg), Math.round(cb)), alpha: a };
 }
 
 // keep the active paletteColors written back into paletteSets[currentSet]
@@ -1207,7 +1207,7 @@ function applyCell(cell, { col, alpha }) {
     cell.classList.add('transparent');
     cell.classList.toggle('tinted', alpha > 0);
     cell.style.backgroundColor = '';
-    cell.style.setProperty('--tint', alpha > 0 ? col.replace('rgb', 'rgba').replace(')', `, ${alpha})`) : '');
+    cell.style.setProperty('--tint', alpha > 0 ? col + Math.round(alpha * 255).toString(16).padStart(2, '0') : '');
   }
 }
 function buildCanvas() {
@@ -1268,7 +1268,11 @@ function setSpoidMode(on) {
 spoidBtn.addEventListener('click', () => setSpoidMode(!spoidMode));
 function pickAt(target) {
   if (!target || !target.classList || !target.classList.contains('cell')) return;
-  const col = composite(+target.dataset.r, +target.dataset.c);
+  const r = +target.dataset.r, c = +target.dataset.c;
+  // pick the color as seen (half layers blended in); where a half layer has nothing
+  // opaque beneath it, the blend would include the background, so take the painted color instead
+  const shown = displayColor(r, c);
+  const col = shown.alpha === 1 ? shown.col : composite(r, c);
   if (!col) {
     selectIndex(0);
     showToast('透明を選びました');
