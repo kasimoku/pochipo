@@ -67,13 +67,17 @@ header {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s, transform 0.1s;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.1s;
 }
 .icon-btn:active { transform: scale(0.92); }
 .icon-btn:hover { background: rgba(255,255,255,0.16); }
 .icon-btn:disabled { opacity: 0.35; cursor: default; }
 .icon-btn:disabled:hover { background: rgba(255,255,255,0.08); }
-.icon-btn.active { background: rgba(255,255,255,0.22); }
+.icon-btn.active {
+  background: rgba(255,255,255,0.22);
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.35);
+}
 .icon-btn[hidden] { display: none; }
 
 /* ---- size control ---- */
