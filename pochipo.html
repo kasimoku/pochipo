@@ -14,6 +14,9 @@
 <meta name="apple-mobile-web-app-title" content="pochipo">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
+/* iOS Safari ignores user-scalable=no: stop quick repeated taps from double-tap zooming
+   (pinch zoom still works; the canvas / swatches keep their own touch-action: none) */
+* { touch-action: manipulation; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
