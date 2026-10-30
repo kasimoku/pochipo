@@ -664,6 +664,7 @@ input[type="range"]::-moz-range-thumb {
     <button class="ctab active" data-i="0">C1</button>
     <button class="ctab" data-i="1">C2</button>
     <button class="ctab" data-i="2">C3</button>
+    <button class="ctab" data-i="3">C4</button>
   </div>
 
   <div class="layer-bar" id="layerBar">
@@ -742,7 +743,7 @@ let paletteSets = [DEFAULT_SET_1.slice(), DEFAULT_SET_2.slice()]; // two indepen
 let currentSet = 0;                       // active palette set (shared by all canvases)
 let paletteColors = paletteSets[currentSet]; // active palette (mirror of paletteSets[currentSet])
 const LAYER_COUNT = 2;         // layer 0 = レイヤー1 (bottom), layer 1 = レイヤー2 (top)
-let canvases = [];             // [{ width, height, layers, visible, activeLayer }] — C1, C2, C3 (palette is shared)
+let canvases = [];             // [{ width, height, layers, visible, activeLayer }] — C1〜C4 (palette is shared)
 let current = 0;               // active canvas index
 let width = 16, height = 16;   // active canvas dimensions (mirror of canvases[current])
 let layers = [];               // active canvas layers[l][r][c] = hex color or null
@@ -1992,7 +1993,7 @@ load();
 while (paletteSets.length < 2) paletteSets.push(DEFAULT_SET_2.slice());
 currentSet = Math.min(Math.max(currentSet, 0), paletteSets.length - 1);
 paletteColors = paletteSets[currentSet];
-while (canvases.length < 3) canvases.push({ width: 16, height: 16, layers: emptyLayers(16, 16), visible: [1, 1], activeLayer: 0 });
+while (canvases.length < 4) canvases.push({ width: 16, height: 16, layers: emptyLayers(16, 16), visible: [1, 1], activeLayer: 0 });
 current = Math.min(Math.max(current, 0), canvases.length - 1);
 loadActive();
 buildCanvas();
