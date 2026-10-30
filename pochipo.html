@@ -651,9 +651,9 @@ input[type="range"]::-moz-range-thumb {
     <div class="setting-row">
       <span class="setting-label">キャンバスサイズ</span>
       <div class="size-ctrl">
-        <input type="number" id="wInput" min="1" max="64" value="16">
+        <input type="number" id="wInput" min="1" max="80" value="16">
         <span>×</span>
-        <input type="number" id="hInput" min="1" max="64" value="16">
+        <input type="number" id="hInput" min="1" max="80" value="16">
         <button class="tool-btn" id="resizeBtn" style="height:32px;padding:0 12px;">適用</button>
       </div>
     </div>
@@ -1419,8 +1419,8 @@ window.addEventListener('pointercancel', () => { drawing = false; selDrag = null
 
 /* ============ resize ============ */
 function doResize(newW, newH) {
-  newW = Math.max(1, Math.min(64, newW || 1));
-  newH = Math.max(1, Math.min(64, newH || 1));
+  newW = Math.max(1, Math.min(80, newW || 1));
+  newH = Math.max(1, Math.min(80, newH || 1));
   layers = layers.map(g => fitGrid(g, newW, newH));
   width = newW; height = newH;
   wInput.value = width; hInput.value = height;
