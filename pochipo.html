@@ -215,8 +215,8 @@ header {
 .edit-bar .sep { width: 1px; height: 22px; background: rgba(255,255,255,0.12); }
 @media (max-width: 420px) {
   /* keep all tool buttons on one row on phones */
-  .edit-bar { gap: 4px; }
-  .edit-bar .icon-btn { width: 33px; }
+  .edit-bar { gap: 3px; flex-wrap: nowrap; }
+  .edit-bar .icon-btn { flex: 1 1 0; width: auto; min-width: 0; max-width: 36px; }
 }
 
 /* ---- palette ---- */
@@ -670,6 +670,8 @@ input[type="range"]::-moz-range-thumb {
 
   <div class="edit-bar" id="editBar">
     <button class="icon-btn" id="flipBtn" title="左右反転"></button>
+    <button class="icon-btn" id="flipVBtn" title="上下反転"></button>
+    <button class="icon-btn" id="rotateBtn" title="右に90度回転"></button>
     <span class="sep"></span>
     <button class="icon-btn" data-shift="left" title="左へ1マス移動"></button>
     <button class="icon-btn" data-shift="up" title="上へ1マス移動"></button>
@@ -1425,6 +1427,49 @@ function flipH() {
   redrawCells();
   save();
 }
+function flipV() {
+  revealActiveLayer();
+  pushUndo();
+  if (sel) {
+    // mirror within the selection's own top-bottom extent
+    let minR = height, maxR = -1;
+    sel.forEach((row, r) => { if (row.some(on => on)) { minR = Math.min(minR, r); maxR = Math.max(maxR, r); } });
+    moveSelection((r, c) => [minR + maxR - r, c]);
+  } else {
+    layers[activeLayer] = layers[activeLayer].slice().reverse().map(row => row.slice());
+  }
+  redrawCells();
+  save();
+}
+// rotate 90° clockwise around the center of the selection's bounding box (or of the canvas).
+// on a non-square canvas / selection, refuse if anything would land outside the canvas
+function rotateCW() {
+  let minR = 0, maxR = height - 1, minC = 0, maxC = width - 1;
+  if (sel) {
+    minR = height; maxR = -1; minC = width; maxC = -1;
+    sel.forEach((row, r) => row.forEach((on, c) => {
+      if (on) { minR = Math.min(minR, r); maxR = Math.max(maxR, r); minC = Math.min(minC, c); maxC = Math.max(maxC, c); }
+    }));
+  }
+  const cr = (minR + maxR) / 2, cc = (minC + maxC) / 2;
+  const dest = (r, c) => [Math.round(cr - cc + c), Math.round(cc + cr - r)];
+  const outside = (r, c) => { const [nr, nc] = dest(r, c); return nr < 0 || nr >= height || nc < 0 || nc >= width; };
+  const g = layers[activeLayer];
+  // a selection moves as a whole; without one only painted pixels matter
+  const blocked = g.some((row, r) => row.some((col, c) => (sel ? sel[r][c] : col) && outside(r, c)));
+  if (blocked) { showToast('はみ出すため回転できません'); return; }
+  revealActiveLayer();
+  pushUndo();
+  if (sel) {
+    moveSelection(dest);
+  } else {
+    const ng = g.map(row => row.map(() => null));
+    g.forEach((row, r) => row.forEach((col, c) => { if (col) { const [nr, nc] = dest(r, c); ng[nr][nc] = col; } }));
+    layers[activeLayer] = ng;
+  }
+  redrawCells();
+  save();
+}
 // move the whole layer one cell; pixels pushed off one edge wrap around to the other.
 // with a selection, only the selected cells move, and they stop at the canvas edge
 const SHIFT_DIR = { left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0] };
@@ -1447,6 +1492,8 @@ function shiftAll(dir) {
   save();
 }
 document.getElementById('flipBtn').addEventListener('click', flipH);
+document.getElementById('flipVBtn').addEventListener('click', flipV);
+document.getElementById('rotateBtn').addEventListener('click', rotateCW);
 document.getElementById('editBar').addEventListener('click', e => {
   const b = e.target.closest('[data-shift]');
   if (b) shiftAll(b.dataset.shift);
@@ -1743,6 +1790,25 @@ const FLIP = {
     [0,0,0,0,0,0,0,0,0,0,0,0]
   ]
 };
+// rotate icon (12×12 pixel art: clockwise circular arrow, head on the right side)
+const ROTATE = {
+  palette: { 0: null, 1: '#CFCFCF' },
+  width: 12, height: 12,
+  grid: [
+    [0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,1,1,1,1,0,0,0,0],
+    [0,0,0,1,1,0,0,1,1,0,0,0],
+    [0,0,1,1,0,0,0,0,1,1,0,0],
+    [0,0,1,0,0,0,0,1,1,1,1,0],
+    [0,1,1,0,0,0,0,0,1,1,0,0],
+    [0,1,1,0,0,0,0,0,0,0,0,0],
+    [0,0,1,0,0,0,0,0,0,1,0,0],
+    [0,0,1,1,0,0,0,0,1,1,0,0],
+    [0,0,0,1,1,0,0,1,1,0,0,0],
+    [0,0,0,0,1,1,1,1,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0]
+  ]
+};
 // shift icon (12×12 pixel art arrow pointing right; other directions are rotations)
 const ARROW_RIGHT = {
   palette: { 0: null, 1: '#CFCFCF' },
@@ -1868,6 +1934,8 @@ function renderLogo() {
 renderLogo();
 settingsBtn.innerHTML = pixelSVG(GEAR, 2);
 document.getElementById('flipBtn').innerHTML = pixelSVG(FLIP, 2);
+document.getElementById('flipVBtn').innerHTML = pixelSVG(rotateArt(FLIP, 1), 2);
+document.getElementById('rotateBtn').innerHTML = pixelSVG(ROTATE, 2);
 spoidBtn.innerHTML = pixelSVG(SPOID, 2);
 bucketBtn.innerHTML = pixelSVG(BUCKET, 2);
 selectBtn.innerHTML = pixelSVG(SELECT, 2);
