@@ -1834,23 +1834,27 @@ const FLIP = {
     [0,0,0,0,0,0,0,0,0,0,0,0]
   ]
 };
-// rotate icon (12×12 pixel art: clockwise circular arrow, head on the right side)
+// rotate icon (16×16 pixel art: arrow turning right then down)
 const ROTATE = {
-  palette: { 0: null, 1: '#CFCFCF' },
-  width: 12, height: 12,
+  palette: { 0: null, 1: '#FFFFFF' },
+  width: 16, height: 16,
   grid: [
-    [0,0,0,0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,1,1,1,1,0,0,0,0],
-    [0,0,0,1,1,0,0,1,1,0,0,0],
-    [0,0,1,1,0,0,0,0,1,1,0,0],
-    [0,0,1,0,0,0,0,1,1,1,1,0],
-    [0,1,1,0,0,0,0,0,1,1,0,0],
-    [0,1,1,0,0,0,0,0,0,0,0,0],
-    [0,0,1,0,0,0,0,0,0,1,0,0],
-    [0,0,1,1,0,0,0,0,1,1,0,0],
-    [0,0,0,1,1,0,0,1,1,0,0,0],
-    [0,0,0,0,1,1,1,1,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0,0,0,0]
+    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0],
+    [0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0],
+    [0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0],
+    [0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0],
+    [0,0,0,0,0,0,0,1,0,0,1,1,1,0,0,0],
+    [0,0,0,0,0,0,0,1,1,0,1,1,1,0,0,0],
+    [0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0],
+    [0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0],
+    [0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0],
+    [0,1,1,0,0,0,0,1,1,1,1,1,1,1,0,0],
+    [0,1,1,0,0,0,0,1,1,1,1,1,1,1,1,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
   ]
 };
 // shift icon (12×12 pixel art arrow pointing right; other directions are rotations)
@@ -1979,7 +1983,7 @@ renderLogo();
 settingsBtn.innerHTML = pixelSVG(GEAR, 2);
 document.getElementById('flipBtn').innerHTML = pixelSVG(FLIP, 2);
 document.getElementById('flipVBtn').innerHTML = pixelSVG(rotateArt(FLIP, 1), 2);
-document.getElementById('rotateBtn').innerHTML = pixelSVG(ROTATE, 2);
+document.getElementById('rotateBtn').innerHTML = pixelSVG(ROTATE, 1.5); // 16×16 at 1.5px = same 24px as the 12×12 icons
 spoidBtn.innerHTML = pixelSVG(SPOID, 2);
 bucketBtn.innerHTML = pixelSVG(BUCKET, 2);
 selectBtn.innerHTML = pixelSVG(SELECT, 2);
